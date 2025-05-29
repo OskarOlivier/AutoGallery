@@ -13,6 +13,7 @@ import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 
 class ScreenStateService : Service() {
@@ -21,14 +22,23 @@ class ScreenStateService : Service() {
     private var isScreenOff = false
     private var slideshowStarted = false
 
+    companion object {
+        private const val TAG = "ScreenStateService"
+        private const val CHANNEL_ID = "auto_gallery_service"
+        private const val NOTIFICATION_ID = 1001
+    }
+
     private val screenStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            Log.d(TAG, "Screen state changed: ${intent?.action}")
             when (intent?.action) {
                 Intent.ACTION_SCREEN_OFF -> {
+                    Log.d(TAG, "Screen turned off")
                     isScreenOff = true
                     checkAndStartSlideshow()
                 }
                 Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT -> {
+                    Log.d(TAG, "Screen turned on")
                     isScreenOff = false
                     slideshowStarted = false
                 }
@@ -38,12 +48,14 @@ class ScreenStateService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        Log.d(TAG, "Service created")
         preferencesManager = PreferencesManager(this)
         createNotificationChannel()
         registerScreenStateReceiver()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "Service started")
         startForeground(NOTIFICATION_ID, createNotification())
         return START_STICKY
     }
@@ -51,46 +63,79 @@ class ScreenStateService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun registerScreenStateReceiver() {
-        val filter = IntentFilter().apply {
-            addAction(Intent.ACTION_SCREEN_OFF)
-            addAction(Intent.ACTION_SCREEN_ON)
-            addAction(Intent.ACTION_USER_PRESENT)
+        try {
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_USER_PRESENT)
+            }
+            registerReceiver(screenStateReceiver, filter)
+            Log.d(TAG, "Screen state receiver registered")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error registering screen state receiver", e)
         }
-        registerReceiver(screenStateReceiver, filter)
     }
 
     private fun checkAndStartSlideshow() {
-        if (!isScreenOff || slideshowStarted) return
+        Log.d(TAG, "Checking if slideshow should start - isScreenOff: $isScreenOff, slideshowStarted: $slideshowStarted")
+
+        if (!isScreenOff || slideshowStarted) {
+            Log.d(TAG, "Not starting slideshow - conditions not met")
+            return
+        }
 
         val settings = preferencesManager.loadSettings()
-        if (!settings.isEnabled || settings.selectedPhotos.isEmpty()) return
+        if (!settings.isEnabled || settings.selectedPhotos.isEmpty()) {
+            Log.d(TAG, "Not starting slideshow - disabled or no photos selected")
+            return
+        }
 
         // Check charging conditions
         if (settings.enableOnCharging && !settings.enableAlways) {
-            if (!isDeviceCharging()) return
+            if (!isDeviceCharging()) {
+                Log.d(TAG, "Not starting slideshow - device not charging")
+                return
+            }
         }
 
-        // Start slideshow with a slight delay to ensure screen is properly off
+        Log.d(TAG, "Starting slideshow with delay")
+        // Start slideshow with a shorter delay since we made the activity more robust
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             if (isScreenOff && !slideshowStarted) {
+                Log.d(TAG, "Actually starting slideshow now")
                 startSlideshow()
+            } else {
+                Log.d(TAG, "Slideshow start cancelled - screen state changed")
             }
         }, 2000) // 2 second delay
     }
 
     private fun isDeviceCharging(): Boolean {
-        val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
-        return batteryManager.isCharging
+        return try {
+            val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+            val isCharging = batteryManager.isCharging
+            Log.d(TAG, "Device charging status: $isCharging")
+            isCharging
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking charging status", e)
+            false
+        }
     }
 
     private fun startSlideshow() {
-        slideshowStarted = true
-        val intent = Intent(this, SlideshowActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+        try {
+            slideshowStarted = true
+            val intent = Intent(this, SlideshowActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            startActivity(intent)
+            Log.d(TAG, "Slideshow activity started")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting slideshow activity", e)
+            slideshowStarted = false
         }
-        startActivity(intent)
     }
 
     private fun createNotificationChannel() {
@@ -129,15 +174,11 @@ class ScreenStateService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        Log.d(TAG, "Service destroyed")
         try {
             unregisterReceiver(screenStateReceiver)
         } catch (e: Exception) {
-            // Receiver might not be registered
+            Log.w(TAG, "Error unregistering receiver", e)
         }
-    }
-
-    companion object {
-        private const val CHANNEL_ID = "auto_gallery_service"
-        private const val NOTIFICATION_ID = 1001
     }
 }

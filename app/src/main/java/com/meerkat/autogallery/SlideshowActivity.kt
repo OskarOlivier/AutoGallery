@@ -15,18 +15,17 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import android.view.animation.AccelerateDecelerateInterpolator
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.bitmap.CenterCrop
 import com.bumptech.glide.request.target.SimpleTarget
 import com.bumptech.glide.request.transition.Transition
 import android.widget.ImageView
 import jp.wasabeef.glide.transformations.BlurTransformation
-import java.io.File
 import kotlin.random.Random
 
 class SlideshowActivity : AppCompatActivity() {
@@ -43,11 +42,36 @@ class SlideshowActivity : AppCompatActivity() {
     private var photoList = mutableListOf<String>()
     private var slideshowRunnable: Runnable? = null
     private var currentZoomAnimator: ObjectAnimator? = null
+    private var isActivityActive = false
+    private var hasStartedSlideshow = false
+    private var startTime = 0L
+    private var shouldIgnoreScreenOn = true
+
+    companion object {
+        private const val TAG = "SlideshowActivity"
+    }
 
     private val screenStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            Log.d(TAG, "Screen state changed: ${intent?.action}")
             when (intent?.action) {
                 Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT -> {
+                    val timeSinceStart = System.currentTimeMillis() - startTime
+                    Log.d(TAG, "Screen turned on after ${timeSinceStart}ms, shouldIgnoreScreenOn: $shouldIgnoreScreenOn")
+
+                    // Ignore screen on events for the first 5 seconds after activity start
+                    // This prevents the activity from finishing itself when it turns the screen on
+                    if (shouldIgnoreScreenOn && timeSinceStart < 5000) {
+                        Log.d(TAG, "Ignoring screen on event - activity just started")
+                        // After 10 seconds, stop ignoring screen on events
+                        handler.postDelayed({
+                            shouldIgnoreScreenOn = false
+                            Log.d(TAG, "Now listening for screen on events")
+                        }, 10000 - timeSinceStart)
+                        return
+                    }
+
+                    Log.d(TAG, "Screen turned on, finishing slideshow")
                     finish()
                 }
             }
@@ -56,32 +80,57 @@ class SlideshowActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        startTime = System.currentTimeMillis()
+        Log.d(TAG, "onCreate called at $startTime")
 
-        // Setup fullscreen and keep screen on
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_FULLSCREEN or
-                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
-            WindowManager.LayoutParams.FLAG_FULLSCREEN or
-                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-        )
+        try {
+            // Setup fullscreen and keep screen on
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_FULLSCREEN or
+                        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
+                WindowManager.LayoutParams.FLAG_FULLSCREEN or
+                        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            )
 
-        setContentView(R.layout.activity_slideshow)
+            setContentView(R.layout.activity_slideshow)
 
-        // Hide navigation bar
-        window.decorView.systemUiVisibility = (
-                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                        View.SYSTEM_UI_FLAG_FULLSCREEN or
-                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                )
+            // Hide navigation bar
+            window.decorView.systemUiVisibility = (
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                            View.SYSTEM_UI_FLAG_FULLSCREEN or
+                            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    )
 
-        initViews()
-        loadSettings()
-        registerScreenStateReceiver()
-        startSlideshow()
+            initViews()
+            loadSettings()
+
+            if (photoList.isEmpty()) {
+                Log.e(TAG, "No photos available, finishing activity")
+                finish()
+                return
+            }
+
+            isActivityActive = true
+
+            // Register receiver immediately but with logic to ignore initial screen on
+            registerScreenStateReceiver()
+
+            // Start slideshow after a short delay
+            handler.postDelayed({
+                if (!isFinishing && isActivityActive) {
+                    Log.d(TAG, "Starting slideshow after delay")
+                    startSlideshow()
+                }
+            }, 500) // Shorter delay
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in onCreate", e)
+            finish()
+        }
     }
 
     private fun initViews() {
@@ -100,8 +149,9 @@ class SlideshowActivity : AppCompatActivity() {
         settings = preferencesManager.loadSettings()
         photoList = settings.selectedPhotos.toMutableList()
 
+        Log.d(TAG, "Loaded ${photoList.size} photos")
+
         if (photoList.isEmpty()) {
-            finish()
             return
         }
 
@@ -129,6 +179,7 @@ class SlideshowActivity : AppCompatActivity() {
                     } else 0L
                 } ?: 0L
             } catch (e: Exception) {
+                Log.w(TAG, "Error getting date modified for $uriString", e)
                 0L
             }
         }
@@ -145,46 +196,71 @@ class SlideshowActivity : AppCompatActivity() {
                     } else 0L
                 } ?: 0L
             } catch (e: Exception) {
+                Log.w(TAG, "Error getting date created for $uriString", e)
                 0L
             }
         }
     }
 
     private fun registerScreenStateReceiver() {
-        val filter = IntentFilter().apply {
-            addAction(Intent.ACTION_SCREEN_ON)
-            addAction(Intent.ACTION_USER_PRESENT)
+        try {
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_USER_PRESENT)
+            }
+            registerReceiver(screenStateReceiver, filter)
+            Log.d(TAG, "Screen state receiver registered")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error registering screen state receiver", e)
         }
-        registerReceiver(screenStateReceiver, filter)
     }
 
     private fun startSlideshow() {
-        if (photoList.isNotEmpty()) {
+        if (photoList.isNotEmpty() && isActivityActive && !hasStartedSlideshow) {
+            hasStartedSlideshow = true
+            Log.d(TAG, "Starting slideshow with ${photoList.size} photos")
             showNextImage()
         }
     }
 
     private fun showNextImage() {
-        if (photoList.isEmpty()) return
+        if (photoList.isEmpty() || !isActivityActive) return
 
         val currentUri = Uri.parse(photoList[currentPhotoIndex])
+        Log.d(TAG, "Loading image ${currentPhotoIndex + 1}/${photoList.size}: $currentUri")
 
-        // Load image into next ImageView
+        // Load image into next ImageView with error handling
         Glide.with(this)
             .load(currentUri)
             .centerInside()
+            .error(R.drawable.ic_photo_library) // Show placeholder on error
             .into(object : SimpleTarget<android.graphics.drawable.Drawable>() {
                 override fun onResourceReady(
                     resource: android.graphics.drawable.Drawable,
                     transition: Transition<in android.graphics.drawable.Drawable>?
                 ) {
+                    if (!isActivityActive) return
+
+                    Log.d(TAG, "Image loaded successfully")
                     nextImageView.setImageDrawable(resource)
 
                     // Load blurred background if enabled
                     if (settings.enableBlurredBackground) {
                         loadBlurredBackground(currentUri)
                     } else {
-                        // Even if blurred background is disabled, we should perform the transition
+                        performTransition()
+                    }
+                }
+
+                override fun onLoadFailed(errorDrawable: android.graphics.drawable.Drawable?) {
+                    Log.e(TAG, "Failed to load image: $currentUri")
+                    // Set a placeholder and continue
+                    nextImageView.setImageResource(R.drawable.ic_photo_library)
+
+                    // Still try to load background or proceed with transition
+                    if (settings.enableBlurredBackground) {
+                        loadBlurredBackground(currentUri)
+                    } else {
                         performTransition()
                     }
                 }
@@ -199,17 +275,28 @@ class SlideshowActivity : AppCompatActivity() {
                 CenterCrop(),
                 BlurTransformation(25, 3) // radius: 25, sampling: 3 for high quality
             )
+            .error(R.drawable.ic_photo_library)
             .into(object : SimpleTarget<android.graphics.drawable.Drawable>() {
                 override fun onResourceReady(
                     resource: android.graphics.drawable.Drawable,
                     transition: Transition<in android.graphics.drawable.Drawable>?
                 ) {
+                    if (!isActivityActive) return
+
                     // Apply additional darkening overlay for better contrast
                     val bitmap = drawableToBitmap(resource)
                     val darkenedBitmap = applyDarkenOverlay(bitmap)
                     nextBackgroundImageView.setImageBitmap(darkenedBitmap)
 
                     // Now perform the transition with both image and background ready
+                    performTransition()
+                }
+
+                override fun onLoadFailed(errorDrawable: android.graphics.drawable.Drawable?) {
+                    Log.w(TAG, "Failed to load blurred background, using solid background")
+                    // Set a solid dark background as fallback
+                    nextBackgroundImageView.setBackgroundColor(0xFF000000.toInt())
+                    // Continue with transition
                     performTransition()
                 }
             })
@@ -244,6 +331,8 @@ class SlideshowActivity : AppCompatActivity() {
     }
 
     private fun performTransition() {
+        if (!isActivityActive) return
+
         val animator = when (settings.transitionType) {
             TransitionType.FADE -> createFadeTransition()
             TransitionType.SLIDE_LEFT -> createSlideTransition(-1f, 0f)
@@ -280,11 +369,13 @@ class SlideshowActivity : AppCompatActivity() {
 
         animatorSet.addListener(object : android.animation.AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: android.animation.Animator) {
-                swapImageViews()
-                if (settings.enableBlurredBackground) {
-                    swapBackgroundViews()
+                if (isActivityActive) {
+                    swapImageViews()
+                    if (settings.enableBlurredBackground) {
+                        swapBackgroundViews()
+                    }
+                    startSubtleZoomEffect()
                 }
-                startSubtleZoomEffect()
             }
         })
 
@@ -348,13 +439,13 @@ class SlideshowActivity : AppCompatActivity() {
 
         animatorSet.addListener(object : android.animation.AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: android.animation.Animator) {
-                swapImageViews()
-
-                if (settings.enableBlurredBackground) {
-                    swapBackgroundViews()
+                if (isActivityActive) {
+                    swapImageViews()
+                    if (settings.enableBlurredBackground) {
+                        swapBackgroundViews()
+                    }
+                    startSubtleZoomEffect()
                 }
-
-                startSubtleZoomEffect()
             }
         })
 
@@ -362,10 +453,11 @@ class SlideshowActivity : AppCompatActivity() {
     }
 
     private fun startSubtleZoomEffect() {
+        if (!isActivityActive) return
+
         // Cancel any existing zoom animation
         currentZoomAnimator?.cancel()
 
-        // The view should already be at scale 1f from the swap, so no need to reset
         // Create zoom animation from current scale to 1.03 (3% zoom)
         val scaleXAnimator = ObjectAnimator.ofFloat(currentImageView, "scaleX", 1f, 1.03f)
         val scaleYAnimator = ObjectAnimator.ofFloat(currentImageView, "scaleY", 1f, 1.03f)
@@ -417,12 +509,20 @@ class SlideshowActivity : AppCompatActivity() {
         nextBackgroundImageView.translationY = 0f
     }
 
+    private fun moveToNextPhoto() {
+        currentPhotoIndex = (currentPhotoIndex + 1) % photoList.size
+    }
+
     private fun scheduleNextImage() {
+        if (!isActivityActive) return
+
         slideshowRunnable?.let { handler.removeCallbacks(it) }
 
         slideshowRunnable = Runnable {
-            currentPhotoIndex = (currentPhotoIndex + 1) % photoList.size
-            showNextImage()
+            if (isActivityActive) {
+                moveToNextPhoto()
+                showNextImage()
+            }
         }
 
         handler.postDelayed(slideshowRunnable!!, settings.slideDuration.toLong())
@@ -430,17 +530,33 @@ class SlideshowActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        Log.d(TAG, "onDestroy called")
+
+        isActivityActive = false
+        shouldIgnoreScreenOn = false
         slideshowRunnable?.let { handler.removeCallbacks(it) }
         currentZoomAnimator?.cancel()
+
         try {
             unregisterReceiver(screenStateReceiver)
+            Log.d(TAG, "Screen state receiver unregistered")
         } catch (e: Exception) {
-            // Receiver might not be registered
+            Log.w(TAG, "Error unregistering receiver (may not have been registered)", e)
         }
     }
 
     override fun onBackPressed() {
         super.onBackPressed()
         finish()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Log.d(TAG, "onResume called")
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Log.d(TAG, "onPause called")
     }
 }
