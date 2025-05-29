@@ -4,6 +4,7 @@ package com.meerkat.autogallery
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -120,7 +121,7 @@ class MainActivity : AppCompatActivity() {
             testButton.setOnClickListener {
                 try {
                     val settings = preferencesManager.loadSettings()
-                    if (settings.selectedPhotos.isNotEmpty()) {
+                    if (settings.photoInfoList.isNotEmpty() || settings.selectedPhotos.isNotEmpty()) {
                         startActivity(Intent(this, SlideshowActivity::class.java))
                     } else {
                         Toast.makeText(this, "Please select photos in Settings first", Toast.LENGTH_SHORT).show()
@@ -140,21 +141,96 @@ class MainActivity : AppCompatActivity() {
             val settings = preferencesManager.loadSettings()
             enableSwitch.isChecked = settings.isEnabled
 
-            val photoCount = settings.selectedPhotos.size
-            photoCountText.text = if (photoCount > 0) {
-                "$photoCount photos selected"
+            // Get photo information
+            val photoCount = maxOf(settings.photoInfoList.size, settings.selectedPhotos.size)
+
+            // Create detailed photo count text with orientation information
+            val photoCountDetail = if (photoCount > 0) {
+                buildString {
+                    append("$photoCount photos selected")
+
+                    // Add orientation breakdown if available
+                    if (settings.photoInfoList.isNotEmpty()) {
+                        val landscapeCount = settings.photoInfoList.count { it.orientation == ImageOrientation.LANDSCAPE }
+                        val portraitCount = settings.photoInfoList.count { it.orientation == ImageOrientation.PORTRAIT }
+                        val squareCount = settings.photoInfoList.count { it.orientation == ImageOrientation.SQUARE }
+
+                        appendLine()
+
+                        if (settings.enableOrientationFiltering) {
+                            // Get current device orientation
+                            val currentOrientation = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                                ImageOrientation.LANDSCAPE
+                            } else {
+                                ImageOrientation.PORTRAIT
+                            }
+
+                            // Calculate available photos for current orientation
+                            val availableForCurrentOrientation = settings.photoInfoList.count { photoInfo ->
+                                OrientationUtils.shouldShowImage(
+                                    photoInfo.orientation,
+                                    currentOrientation,
+                                    settings.showSquareImagesInBothOrientations
+                                )
+                            }
+
+                            val orientationName = if (currentOrientation == ImageOrientation.LANDSCAPE) "landscape" else "portrait"
+                            append("📱 $availableForCurrentOrientation available in $orientationName mode")
+                            appendLine()
+                            append("🏞️ $landscapeCount landscape • 📱 $portraitCount portrait • ⬜ $squareCount square")
+                        } else {
+                            append("🏞️ $landscapeCount landscape • 📱 $portraitCount portrait • ⬜ $squareCount square")
+                            appendLine()
+                            append("(All photos will be shown - orientation filtering disabled)")
+                        }
+                    }
+                }
             } else {
                 "No photos selected"
             }
 
+            photoCountText.text = photoCountDetail
+
             statusText.text = when {
                 !settings.isEnabled -> "Auto Gallery is disabled"
                 photoCount == 0 -> "Please select photos in Settings"
+                settings.enableOrientationFiltering -> {
+                    val currentOrientation = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                        ImageOrientation.LANDSCAPE
+                    } else {
+                        ImageOrientation.PORTRAIT
+                    }
+
+                    val availableForCurrentOrientation = if (settings.photoInfoList.isNotEmpty()) {
+                        settings.photoInfoList.count { photoInfo ->
+                            OrientationUtils.shouldShowImage(
+                                photoInfo.orientation,
+                                currentOrientation,
+                                settings.showSquareImagesInBothOrientations
+                            )
+                        }
+                    } else {
+                        photoCount // Fallback for backward compatibility
+                    }
+
+                    if (availableForCurrentOrientation > 0) {
+                        "Auto Gallery is active - will start on screen timeout"
+                    } else {
+                        val orientationName = if (currentOrientation == ImageOrientation.LANDSCAPE) "landscape" else "portrait"
+                        "No photos available for $orientationName mode"
+                    }
+                }
                 else -> "Auto Gallery is active - will start on screen timeout"
             }
         } catch (e: Exception) {
             Log.e("MainActivity", "Error updating UI", e)
         }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Update UI when orientation changes to show correct photo counts
+        updateUI()
     }
 
     private fun checkPermissionsAndSetup() {

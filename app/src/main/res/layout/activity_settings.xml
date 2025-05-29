@@ -42,7 +42,63 @@
                     android:id="@+id/selectedPhotosRecycler"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:minHeight="100dp" />
+                    android:minHeight="100dp"
+                    android:layout_marginBottom="12dp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/orientationStatsText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="No images selected"
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:background="?attr/colorSurfaceVariant"
+                    android:padding="12dp"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Orientation Filtering"
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:layout_marginBottom="12dp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Show only appropriate images based on device orientation"
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:layout_marginBottom="16dp" />
+
+                <com.google.android.material.checkbox.MaterialCheckBox
+                    android:id="@+id/orientationFilteringCheckbox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Enable orientation-based filtering"
+                    android:layout_marginBottom="8dp"
+                    android:checked="true" />
+
+                <com.google.android.material.checkbox.MaterialCheckBox
+                    android:id="@+id/squareImagesCheckbox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Show square images in both orientations"
+                    android:checked="true" />
 
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>

@@ -7,9 +7,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Matrix
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
@@ -32,7 +32,6 @@ import com.bumptech.glide.request.transition.Transition
 import android.widget.ImageView
 import jp.wasabeef.glide.transformations.BlurTransformation
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.random.Random
 
 class SlideshowActivity : AppCompatActivity() {
@@ -46,7 +45,9 @@ class SlideshowActivity : AppCompatActivity() {
     private lateinit var settings: GallerySettings
     private val handler = Handler(Looper.getMainLooper())
     private var currentPhotoIndex = 0
-    private var photoList = mutableListOf<String>()
+    private var currentPhotoList = mutableListOf<PhotoInfo>() // Filtered by orientation
+    private var allPhotoList = mutableListOf<PhotoInfo>() // All photos
+    private var currentDeviceOrientation: ImageOrientation = ImageOrientation.LANDSCAPE
     private var slideshowRunnable: Runnable? = null
     private var currentZoomAnimator: ObjectAnimator? = null
     private var isActivityActive = false
@@ -72,10 +73,8 @@ class SlideshowActivity : AppCompatActivity() {
                     Log.d(TAG, "Screen turned on after ${timeSinceStart}ms, shouldIgnoreScreenOn: $shouldIgnoreScreenOn")
 
                     // Ignore screen on events for the first 5 seconds after activity start
-                    // This prevents the activity from finishing itself when it turns the screen on
                     if (shouldIgnoreScreenOn && timeSinceStart < 5000) {
                         Log.d(TAG, "Ignoring screen on event - activity just started")
-                        // After 10 seconds, stop ignoring screen on events
                         handler.postDelayed({
                             shouldIgnoreScreenOn = false
                             Log.d(TAG, "Now listening for screen on events")
@@ -108,8 +107,8 @@ class SlideshowActivity : AppCompatActivity() {
             initViews()
             loadSettings()
 
-            if (photoList.isEmpty()) {
-                Log.e(TAG, "No photos available, finishing activity")
+            if (currentPhotoList.isEmpty()) {
+                Log.e(TAG, "No photos available for current orientation, finishing activity")
                 finish()
                 return
             }
@@ -137,7 +136,8 @@ class SlideshowActivity : AppCompatActivity() {
         val metrics = resources.displayMetrics
         screenWidth = metrics.widthPixels
         screenHeight = metrics.heightPixels
-        Log.d(TAG, "Screen dimensions: ${screenWidth}x${screenHeight}")
+        currentDeviceOrientation = OrientationUtils.getCurrentDeviceOrientation(screenWidth, screenHeight)
+        Log.d(TAG, "Screen dimensions: ${screenWidth}x${screenHeight}, orientation: $currentDeviceOrientation")
     }
 
     private fun setupFullscreen() {
@@ -161,19 +161,12 @@ class SlideshowActivity : AppCompatActivity() {
 
         // Modern fullscreen approach for Android 11+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // Android 11+ (API 30+) - Use WindowInsetsController
             window.insetsController?.let { controller ->
-                // Hide both status bar and navigation bar
                 controller.hide(WindowInsets.Type.systemBars())
-
-                // Set behavior to show bars temporarily on swipe
                 controller.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-
-                // Additional: Make sure the layout goes behind system bars
                 window.setDecorFitsSystemWindows(false)
             }
         } else {
-            // Fallback for Android 10 and earlier
             @Suppress("DEPRECATION")
             window.decorView.systemUiVisibility = (
                     View.SYSTEM_UI_FLAG_FULLSCREEN or
@@ -185,9 +178,7 @@ class SlideshowActivity : AppCompatActivity() {
                     )
         }
 
-        // Additional fix: Handle edge-to-edge display properly
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // Ensure content goes edge-to-edge
             window.statusBarColor = android.graphics.Color.TRANSPARENT
             window.navigationBarColor = android.graphics.Color.TRANSPARENT
         }
@@ -197,20 +188,16 @@ class SlideshowActivity : AppCompatActivity() {
 
     private fun setupUIVisibilityListener() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // For Android 11+, listen for insets changes
             window.decorView.setOnApplyWindowInsetsListener { _, insets ->
                 val systemBars = insets.getInsets(WindowInsets.Type.systemBars())
                 if (systemBars.top > 0 || systemBars.bottom > 0) {
-                    // System bars became visible, hide them again
                     window.insetsController?.hide(WindowInsets.Type.systemBars())
                 }
                 insets
             }
         } else {
-            // For older Android versions
             window.decorView.setOnSystemUiVisibilityChangeListener { visibility ->
                 if (visibility and View.SYSTEM_UI_FLAG_FULLSCREEN == 0) {
-                    // System UI became visible, hide it again
                     @Suppress("DEPRECATION")
                     window.decorView.systemUiVisibility = (
                             View.SYSTEM_UI_FLAG_FULLSCREEN or
@@ -239,31 +226,75 @@ class SlideshowActivity : AppCompatActivity() {
     private fun loadSettings() {
         preferencesManager = PreferencesManager(this)
         settings = preferencesManager.loadSettings()
-        photoList = settings.selectedPhotos.toMutableList()
 
-        Log.d(TAG, "Loaded ${photoList.size} photos, zoom type: ${settings.zoomType}")
+        // Load all photos
+        allPhotoList = settings.photoInfoList.toMutableList()
 
-        if (photoList.isEmpty()) {
+        // If no photo info available (backward compatibility), create basic info
+        if (allPhotoList.isEmpty() && settings.selectedPhotos.isNotEmpty()) {
+            allPhotoList = settings.selectedPhotos.map { uri ->
+                PhotoInfo(
+                    uri = uri,
+                    orientation = ImageOrientation.SQUARE,
+                    aspectRatio = 1.0f
+                )
+            }.toMutableList()
+        }
+
+        Log.d(TAG, "Loaded ${allPhotoList.size} total photos")
+
+        // Filter photos by orientation
+        filterPhotosByOrientation()
+
+        if (currentPhotoList.isEmpty()) {
+            Log.w(TAG, "No photos available for current orientation")
             return
         }
 
         // Sort photos based on order type
         sortPhotoList()
+
+        Log.d(TAG, "Using ${currentPhotoList.size} photos for current orientation ($currentDeviceOrientation)")
+    }
+
+    private fun filterPhotosByOrientation() {
+        currentPhotoList = if (settings.enableOrientationFiltering) {
+            allPhotoList.filter { photoInfo ->
+                OrientationUtils.shouldShowImage(
+                    photoInfo.orientation,
+                    currentDeviceOrientation,
+                    settings.showSquareImagesInBothOrientations
+                )
+            }.toMutableList()
+        } else {
+            // If orientation filtering is disabled, show all photos
+            allPhotoList.toMutableList()
+        }
+
+        Log.d(TAG, "Filtered from ${allPhotoList.size} to ${currentPhotoList.size} photos for orientation $currentDeviceOrientation")
+
+        // Log breakdown for debugging
+        if (settings.enableOrientationFiltering) {
+            val landscapeCount = allPhotoList.count { it.orientation == ImageOrientation.LANDSCAPE }
+            val portraitCount = allPhotoList.count { it.orientation == ImageOrientation.PORTRAIT }
+            val squareCount = allPhotoList.count { it.orientation == ImageOrientation.SQUARE }
+            Log.d(TAG, "Available photos: $landscapeCount landscape, $portraitCount portrait, $squareCount square")
+        }
     }
 
     private fun sortPhotoList() {
         when (settings.orderType) {
-            OrderType.RANDOM -> photoList.shuffle()
-            OrderType.ALPHABETICAL -> photoList.sort()
+            OrderType.RANDOM -> currentPhotoList.shuffle()
+            OrderType.ALPHABETICAL -> currentPhotoList.sortBy { it.uri }
             OrderType.DATE_MODIFIED -> sortByDateModified()
             OrderType.DATE_CREATED -> sortByDateCreated()
         }
     }
 
     private fun sortByDateModified() {
-        photoList.sortBy { uriString ->
+        currentPhotoList.sortBy { photoInfo ->
             try {
-                val uri = Uri.parse(uriString)
+                val uri = Uri.parse(photoInfo.uri)
                 val cursor = contentResolver.query(uri, arrayOf(MediaStore.Images.Media.DATE_MODIFIED), null, null, null)
                 cursor?.use {
                     if (it.moveToFirst()) {
@@ -271,16 +302,16 @@ class SlideshowActivity : AppCompatActivity() {
                     } else 0L
                 } ?: 0L
             } catch (e: Exception) {
-                Log.w(TAG, "Error getting date modified for $uriString", e)
+                Log.w(TAG, "Error getting date modified for ${photoInfo.uri}", e)
                 0L
             }
         }
     }
 
     private fun sortByDateCreated() {
-        photoList.sortBy { uriString ->
+        currentPhotoList.sortBy { photoInfo ->
             try {
-                val uri = Uri.parse(uriString)
+                val uri = Uri.parse(photoInfo.uri)
                 val cursor = contentResolver.query(uri, arrayOf(MediaStore.Images.Media.DATE_ADDED), null, null, null)
                 cursor?.use {
                     if (it.moveToFirst()) {
@@ -288,9 +319,45 @@ class SlideshowActivity : AppCompatActivity() {
                     } else 0L
                 } ?: 0L
             } catch (e: Exception) {
-                Log.w(TAG, "Error getting date created for $uriString", e)
+                Log.w(TAG, "Error getting date created for ${photoInfo.uri}", e)
                 0L
             }
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+
+        Log.d(TAG, "Configuration changed: orientation = ${newConfig.orientation}")
+
+        // Update screen dimensions and device orientation
+        getScreenDimensions()
+
+        // Re-filter photos for new orientation
+        val oldPhotoCount = currentPhotoList.size
+        filterPhotosByOrientation()
+
+        Log.d(TAG, "Orientation change: ${oldPhotoCount} -> ${currentPhotoList.size} photos")
+
+        if (currentPhotoList.isEmpty()) {
+            Log.w(TAG, "No photos available for new orientation, finishing slideshow")
+            finish()
+            return
+        }
+
+        // Re-sort the filtered list
+        sortPhotoList()
+
+        // Reset to first photo in the new orientation's list
+        currentPhotoIndex = 0
+
+        // If slideshow is running, restart with new photo list
+        if (hasStartedSlideshow) {
+            // Cancel current slideshow timing
+            slideshowRunnable?.let { handler.removeCallbacks(it) }
+
+            // Start new photo immediately
+            showNextImage()
         }
     }
 
@@ -310,23 +377,25 @@ class SlideshowActivity : AppCompatActivity() {
     }
 
     private fun startSlideshow() {
-        if (photoList.isNotEmpty() && isActivityActive && !hasStartedSlideshow) {
+        if (currentPhotoList.isNotEmpty() && isActivityActive && !hasStartedSlideshow) {
             hasStartedSlideshow = true
-            Log.d(TAG, "Starting slideshow with ${photoList.size} photos")
+            Log.d(TAG, "Starting slideshow with ${currentPhotoList.size} photos for orientation $currentDeviceOrientation")
             showNextImage()
         }
     }
 
     private fun showNextImage() {
-        if (photoList.isEmpty() || !isActivityActive) return
+        if (currentPhotoList.isEmpty() || !isActivityActive) return
 
-        val currentUri = Uri.parse(photoList[currentPhotoIndex])
-        Log.d(TAG, "Loading image ${currentPhotoIndex + 1}/${photoList.size}: $currentUri")
+        val currentPhotoInfo = currentPhotoList[currentPhotoIndex]
+        val currentUri = Uri.parse(currentPhotoInfo.uri)
+
+        Log.d(TAG, "Loading image ${currentPhotoIndex + 1}/${currentPhotoList.size}: ${currentPhotoInfo.orientation} - $currentUri")
 
         // Load image with custom fitting logic
         Glide.with(this)
             .load(currentUri)
-            .error(R.drawable.ic_photo_library) // Show placeholder on error
+            .error(R.drawable.ic_photo_library)
             .into(object : SimpleTarget<Drawable>() {
                 override fun onResourceReady(
                     resource: Drawable,
@@ -334,7 +403,7 @@ class SlideshowActivity : AppCompatActivity() {
                 ) {
                     if (!isActivityActive) return
 
-                    Log.d(TAG, "Image loaded successfully")
+                    Log.d(TAG, "Image loaded successfully - ${currentPhotoInfo.orientation}")
 
                     // Apply custom fitting logic
                     val fittedDrawable = applyCustomFitting(resource)
@@ -353,13 +422,9 @@ class SlideshowActivity : AppCompatActivity() {
 
                 override fun onLoadFailed(errorDrawable: Drawable?) {
                     Log.e(TAG, "Failed to load image: $currentUri")
-                    // Set a placeholder and continue
                     nextImageView.setImageResource(R.drawable.ic_photo_library)
-
-                    // Set correct initial scale even for placeholder
                     setInitialScaleForNextImage()
 
-                    // Still try to load background or proceed with transition
                     if (settings.enableBlurredBackground) {
                         loadBlurredBackground(currentUri)
                     } else {
@@ -648,7 +713,6 @@ class SlideshowActivity : AppCompatActivity() {
 
         Log.d(TAG, "Starting zoom effect: ${startScale} -> ${endScale} for photo index $currentPhotoIndex (zoom amount: ${settings.zoomAmount}%)")
 
-        // The currentImageView should already have the correct starting scale from the previous transition
         // Create zoom animation from current scale to target scale
         val scaleXAnimator = ObjectAnimator.ofFloat(currentImageView, "scaleX", startScale, endScale)
         val scaleYAnimator = ObjectAnimator.ofFloat(currentImageView, "scaleY", startScale, endScale)
@@ -699,7 +763,7 @@ class SlideshowActivity : AppCompatActivity() {
     }
 
     private fun moveToNextPhoto() {
-        currentPhotoIndex = (currentPhotoIndex + 1) % photoList.size
+        currentPhotoIndex = (currentPhotoIndex + 1) % currentPhotoList.size
     }
 
     private fun scheduleNextImage() {

@@ -4,10 +4,12 @@ package com.meerkat.autogallery
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,6 +22,7 @@ import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.slider.Slider
 import com.google.android.material.textview.MaterialTextView
 import android.widget.Spinner
+import kotlinx.coroutines.*
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -38,25 +41,23 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var blurredBackgroundCheckbox: MaterialCheckBox
     private lateinit var chargingOnlyCheckbox: MaterialCheckBox
     private lateinit var alwaysEnabledCheckbox: MaterialCheckBox
+    private lateinit var orientationFilteringCheckbox: MaterialCheckBox
+    private lateinit var squareImagesCheckbox: MaterialCheckBox
     private lateinit var checkPermissionsButton: MaterialButton
     private lateinit var permissionStatusText: MaterialTextView
+    private lateinit var orientationStatsText: MaterialTextView
 
-    private var selectedPhotoUris = mutableSetOf<String>()
+    private var photoInfoList = mutableListOf<PhotoInfo>()
     private lateinit var photoAdapter: SelectedPhotosAdapter
+
+    // Coroutine scope for image analysis
+    private val analysisScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private val multiplePhotoPickerLauncher = registerForActivityResult(
         ActivityResultContracts.GetMultipleContents()
     ) { uris: List<Uri> ->
         if (uris.isNotEmpty()) {
-            // Convert URIs to persistent strings and add to selection
-            uris.forEach { uri ->
-                contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-                selectedPhotoUris.add(uri.toString())
-            }
-            updateSelectedPhotos()
+            analyzeAndAddPhotos(uris)
         }
     }
 
@@ -69,13 +70,14 @@ class SettingsActivity : AppCompatActivity() {
 
         preferencesManager = PreferencesManager(this)
         settings = preferencesManager.loadSettings()
-        selectedPhotoUris = settings.selectedPhotos.toMutableSet()
+        photoInfoList = settings.photoInfoList.toMutableList()
 
         initViews()
         setupSpinners()
         loadCurrentSettings()
         setupListeners()
         checkPermissionStatus()
+        updateOrientationStats()
     }
 
     private fun initViews() {
@@ -91,11 +93,14 @@ class SettingsActivity : AppCompatActivity() {
         blurredBackgroundCheckbox = findViewById(R.id.blurredBackgroundCheckbox)
         chargingOnlyCheckbox = findViewById(R.id.chargingOnlyCheckbox)
         alwaysEnabledCheckbox = findViewById(R.id.alwaysEnabledCheckbox)
+        orientationFilteringCheckbox = findViewById(R.id.orientationFilteringCheckbox)
+        squareImagesCheckbox = findViewById(R.id.squareImagesCheckbox)
         checkPermissionsButton = findViewById(R.id.checkPermissionsButton)
         permissionStatusText = findViewById(R.id.permissionStatusText)
+        orientationStatsText = findViewById(R.id.orientationStatsText)
 
         // Setup RecyclerView for selected photos
-        photoAdapter = SelectedPhotosAdapter(selectedPhotoUris.toMutableList()) { position ->
+        photoAdapter = SelectedPhotosAdapter(photoInfoList.map { it.uri }.toMutableList()) { position ->
             removePhoto(position)
         }
         selectedPhotosRecycler.layoutManager = GridLayoutManager(this, 3)
@@ -136,6 +141,8 @@ class SettingsActivity : AppCompatActivity() {
         blurredBackgroundCheckbox.isChecked = settings.enableBlurredBackground
         chargingOnlyCheckbox.isChecked = settings.enableOnCharging
         alwaysEnabledCheckbox.isChecked = settings.enableAlways
+        orientationFilteringCheckbox.isChecked = settings.enableOrientationFiltering
+        squareImagesCheckbox.isChecked = settings.showSquareImagesInBothOrientations
 
         updateSelectedPhotos()
     }
@@ -175,9 +182,94 @@ class SettingsActivity : AppCompatActivity() {
         blurredBackgroundCheckbox.setOnCheckedChangeListener { _, _ -> saveCurrentSettings() }
         chargingOnlyCheckbox.setOnCheckedChangeListener { _, _ -> saveCurrentSettings() }
         alwaysEnabledCheckbox.setOnCheckedChangeListener { _, _ -> saveCurrentSettings() }
+        orientationFilteringCheckbox.setOnCheckedChangeListener { _, _ ->
+            saveCurrentSettings()
+            updateOrientationStats()
+        }
+        squareImagesCheckbox.setOnCheckedChangeListener { _, _ ->
+            saveCurrentSettings()
+            updateOrientationStats()
+        }
 
         checkPermissionsButton.setOnClickListener {
             requestAllPermissions()
+        }
+    }
+
+    private fun analyzeAndAddPhotos(uris: List<Uri>) {
+        Toast.makeText(this, "Analyzing ${uris.size} images...", Toast.LENGTH_SHORT).show()
+
+        analysisScope.launch {
+            val newPhotos = mutableListOf<PhotoInfo>()
+
+            // Analyze images in background thread
+            withContext(Dispatchers.IO) {
+                uris.forEach { uri ->
+                    try {
+                        // Take persistent permission
+                        contentResolver.takePersistableUriPermission(
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+
+                        // Analyze image dimensions
+                        val photoInfo = analyzeImageOrientation(uri)
+                        if (photoInfo != null) {
+                            newPhotos.add(photoInfo)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("SettingsActivity", "Error analyzing image $uri", e)
+                    }
+                }
+            }
+
+            // Update UI on main thread
+            if (newPhotos.isNotEmpty()) {
+                photoInfoList.addAll(newPhotos)
+                updateSelectedPhotos()
+                saveCurrentSettings()
+                updateOrientationStats()
+
+                Toast.makeText(
+                    this@SettingsActivity,
+                    "Added ${newPhotos.size} images",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    private suspend fun analyzeImageOrientation(uri: Uri): PhotoInfo? {
+        return withContext(Dispatchers.IO) {
+            try {
+                contentResolver.openInputStream(uri)?.use { inputStream ->
+                    val options = BitmapFactory.Options().apply {
+                        inJustDecodeBounds = true
+                    }
+                    BitmapFactory.decodeStream(inputStream, null, options)
+
+                    val width = options.outWidth
+                    val height = options.outHeight
+
+                    if (width > 0 && height > 0) {
+                        val aspectRatio = width.toFloat() / height.toFloat()
+                        val orientation = OrientationUtils.classifyImageOrientation(aspectRatio)
+
+                        Log.d("SettingsActivity", "Image $uri: ${width}x${height}, ratio: $aspectRatio, orientation: $orientation")
+
+                        PhotoInfo(
+                            uri = uri.toString(),
+                            orientation = orientation,
+                            aspectRatio = aspectRatio
+                        )
+                    } else {
+                        null
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("SettingsActivity", "Error analyzing image $uri", e)
+                null
+            }
         }
     }
 
@@ -201,27 +293,59 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun updateSelectedPhotos() {
-        photoAdapter.updatePhotos(selectedPhotoUris.toMutableList())
-        selectPhotosButton.text = if (selectedPhotoUris.isEmpty()) {
+        photoAdapter.updatePhotos(photoInfoList.map { it.uri }.toMutableList())
+        selectPhotosButton.text = if (photoInfoList.isEmpty()) {
             "Select Photos"
         } else {
-            "Add More Photos (${selectedPhotoUris.size} selected)"
+            "Add More Photos (${photoInfoList.size} selected)"
         }
     }
 
+    private fun updateOrientationStats() {
+        if (photoInfoList.isEmpty()) {
+            orientationStatsText.text = "No images selected"
+            return
+        }
+
+        val landscapeCount = photoInfoList.count { it.orientation == ImageOrientation.LANDSCAPE }
+        val portraitCount = photoInfoList.count { it.orientation == ImageOrientation.PORTRAIT }
+        val squareCount = photoInfoList.count { it.orientation == ImageOrientation.SQUARE }
+
+        val stats = buildString {
+            append("📊 Image Analysis: ")
+            append("🏞️ ${landscapeCount} landscape, ")
+            append("📱 ${portraitCount} portrait, ")
+            append("⬜ ${squareCount} square")
+
+            if (orientationFilteringCheckbox.isChecked) {
+                appendLine()
+                append("✅ Orientation filtering enabled")
+                if (squareImagesCheckbox.isChecked) {
+                    append(" (square images shown in both orientations)")
+                }
+            } else {
+                appendLine()
+                append("❌ Orientation filtering disabled (all images shown)")
+            }
+        }
+
+        orientationStatsText.text = stats
+    }
+
     private fun removePhoto(position: Int) {
-        val photosList = selectedPhotoUris.toMutableList()
-        if (position < photosList.size) {
-            selectedPhotoUris.remove(photosList[position])
+        if (position < photoInfoList.size) {
+            photoInfoList.removeAt(position)
             updateSelectedPhotos()
             saveCurrentSettings()
+            updateOrientationStats()
         }
     }
 
     private fun saveCurrentSettings() {
         val newSettings = GallerySettings(
             isEnabled = settings.isEnabled,
-            selectedPhotos = selectedPhotoUris,
+            selectedPhotos = photoInfoList.map { it.uri }.toSet(),
+            photoInfoList = photoInfoList,
             slideDuration = (slideDurationSlider.value * 1000).toInt(),
             orderType = OrderType.values()[orderTypeSpinner.selectedItemPosition],
             transitionType = TransitionType.values()[transitionTypeSpinner.selectedItemPosition],
@@ -229,7 +353,9 @@ class SettingsActivity : AppCompatActivity() {
             zoomAmount = zoomAmountSlider.value.toInt(),
             enableBlurredBackground = blurredBackgroundCheckbox.isChecked,
             enableOnCharging = chargingOnlyCheckbox.isChecked,
-            enableAlways = alwaysEnabledCheckbox.isChecked
+            enableAlways = alwaysEnabledCheckbox.isChecked,
+            enableOrientationFiltering = orientationFilteringCheckbox.isChecked,
+            showSquareImagesInBothOrientations = squareImagesCheckbox.isChecked
         )
 
         preferencesManager.saveSettings(newSettings)
@@ -243,6 +369,7 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        analysisScope.cancel()
         saveCurrentSettings()
     }
 
