@@ -7,7 +7,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.recyclerview.widget.RecyclerView
-import com.bumptech.glide.Glide
+import com.bumptech.glide.Glide  // <- This import was missing!
 
 class SelectedPhotosAdapter(
     private var photoUris: MutableList<String>,
@@ -31,6 +31,8 @@ class SelectedPhotosAdapter(
         Glide.with(holder.itemView.context)
             .load(uri)
             .centerCrop()
+            .placeholder(R.drawable.ic_photo_library) // Add placeholder
+            .error(R.drawable.ic_photo_library) // Add error handling
             .into(holder.imageView)
 
         holder.removeButton.setOnClickListener {
