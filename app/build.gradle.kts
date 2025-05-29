@@ -46,6 +46,9 @@ dependencies {
     implementation("com.github.bumptech.glide:glide:4.16.0")
     annotationProcessor("com.github.bumptech.glide:compiler:4.16.0")
 
+    // Glide transformations for blur effect
+    implementation("jp.wasabeef:glide-transformations:4.3.0")
+
     // Activity result APIs
     implementation("androidx.activity:activity-ktx:1.8.2")
     implementation("androidx.fragment:fragment-ktx:1.6.2")

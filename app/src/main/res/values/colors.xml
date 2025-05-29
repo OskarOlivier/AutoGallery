@@ -1,13 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="primary_color">#6200EE</color>
-    <color name="primary_variant">#3700B3</color>
-    <color name="secondary_color">#03DAC6</color>
-    <color name="background_color">#F5F5F5</color>
-    <color name="surface_color">#FFFFFF</color>
-    <color name="error_color">#B00020</color>
-    <color name="primary_text">#000000</color>
-    <color name="secondary_text">#666666</color>
+    <!-- Keep minimal custom colors - let Material3 handle the rest -->
+    <color name="primary_color">#620062</color>
     <color name="black">#000000</color>
     <color name="white">#FFFFFF</color>
+
+    <!-- Only override if specifically needed -->
+    <color name="surface_variant">#F3F3F3</color>
 </resources>

@@ -25,6 +25,4 @@ enum class TransitionType(val displayName: String) {
     SLIDE_RIGHT("Slide Right"),
     SLIDE_UP("Slide Up"),
     SLIDE_DOWN("Slide Down"),
-    ZOOM_IN("Zoom In"),
-    ZOOM_OUT("Zoom Out")
 }

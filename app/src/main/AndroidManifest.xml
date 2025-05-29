@@ -41,7 +41,6 @@
             android:name=".SlideshowActivity"
             android:exported="false"
             android:theme="@style/Theme.AutoGallery.Fullscreen"
-            android:screenOrientation="landscape"
             android:launchMode="singleTask" />
 
         <service

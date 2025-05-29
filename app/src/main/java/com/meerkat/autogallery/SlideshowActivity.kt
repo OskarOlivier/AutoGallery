@@ -17,6 +17,7 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.view.View
 import android.view.WindowManager
+import android.view.animation.AccelerateDecelerateInterpolator
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.bumptech.glide.Glide
@@ -39,6 +40,7 @@ class SlideshowActivity : AppCompatActivity() {
     private var currentPhotoIndex = 0
     private var photoList = mutableListOf<String>()
     private var slideshowRunnable: Runnable? = null
+    private var currentZoomAnimator: ObjectAnimator? = null
 
     private val screenStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -226,8 +228,6 @@ class SlideshowActivity : AppCompatActivity() {
             TransitionType.SLIDE_RIGHT -> createSlideTransition(1f, 0f)
             TransitionType.SLIDE_UP -> createSlideTransition(0f, -1f)
             TransitionType.SLIDE_DOWN -> createSlideTransition(0f, 1f)
-            TransitionType.ZOOM_IN -> createZoomTransition(0.5f, 1f)
-            TransitionType.ZOOM_OUT -> createZoomTransition(1.5f, 1f)
         }
 
         animator.start()
@@ -249,6 +249,7 @@ class SlideshowActivity : AppCompatActivity() {
         animatorSet.addListener(object : android.animation.AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: android.animation.Animator) {
                 swapImageViews()
+                startSubtleZoomEffect()
             }
         })
 
@@ -295,43 +296,44 @@ class SlideshowActivity : AppCompatActivity() {
                 currentImageView.translationY = 0f
                 nextImageView.translationX = 0f
                 nextImageView.translationY = 0f
+                startSubtleZoomEffect()
             }
         })
 
         return animatorSet
     }
 
-    private fun createZoomTransition(startScale: Float, endScale: Float): AnimatorSet {
-        val scaleOut = ObjectAnimator.ofFloat(currentImageView, "scaleX", 1f, endScale)
-        val scaleOutY = ObjectAnimator.ofFloat(currentImageView, "scaleY", 1f, endScale)
-        val fadeOut = ObjectAnimator.ofFloat(currentImageView, "alpha", 1f, 0f)
+    private fun startSubtleZoomEffect() {
+        // Cancel any existing zoom animation
+        currentZoomAnimator?.cancel()
 
-        val scaleIn = ObjectAnimator.ofFloat(nextImageView, "scaleX", startScale, 1f)
-        val scaleInY = ObjectAnimator.ofFloat(nextImageView, "scaleY", startScale, 1f)
-        val fadeIn = ObjectAnimator.ofFloat(nextImageView, "alpha", 0f, 1f)
+        // Reset scale in case there was a previous animation
+        currentImageView.scaleX = 1f
+        currentImageView.scaleY = 1f
 
-        val duration = 800L
-        scaleOut.duration = duration
-        scaleOutY.duration = duration
-        fadeOut.duration = duration
-        scaleIn.duration = duration
-        scaleInY.duration = duration
-        fadeIn.duration = duration
+        // Create zoom animation from 1.0 to 1.03 (3% zoom)
+        val scaleXAnimator = ObjectAnimator.ofFloat(currentImageView, "scaleX", 1f, 1.03f)
+        val scaleYAnimator = ObjectAnimator.ofFloat(currentImageView, "scaleY", 1f, 1.03f)
 
+        // Set duration to match slide duration
+        val duration = settings.slideDuration.toLong()
+        scaleXAnimator.duration = duration
+        scaleYAnimator.duration = duration
+
+        // Use AccelerateDecelerateInterpolator for ease in/out effect
+        val interpolator = AccelerateDecelerateInterpolator()
+        scaleXAnimator.interpolator = interpolator
+        scaleYAnimator.interpolator = interpolator
+
+        // Create animator set to play both scale animations together
+        currentZoomAnimator = ObjectAnimator()
         val animatorSet = AnimatorSet()
-        animatorSet.playTogether(scaleOut, scaleOutY, fadeOut, scaleIn, scaleInY, fadeIn)
+        animatorSet.playTogether(scaleXAnimator, scaleYAnimator)
 
-        animatorSet.addListener(object : android.animation.AnimatorListenerAdapter() {
-            override fun onAnimationEnd(animation: android.animation.Animator) {
-                swapImageViews()
-                currentImageView.scaleX = 1f
-                currentImageView.scaleY = 1f
-                nextImageView.scaleX = 1f
-                nextImageView.scaleY = 1f
-            }
-        })
+        animatorSet.start()
 
-        return animatorSet
+        // Store reference to the animator set for potential cancellation
+        currentZoomAnimator = scaleXAnimator
     }
 
     private fun swapImageViews() {
@@ -356,6 +358,7 @@ class SlideshowActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         slideshowRunnable?.let { handler.removeCallbacks(it) }
+        currentZoomAnimator?.cancel()
         try {
             unregisterReceiver(screenStateReceiver)
         } catch (e: Exception) {
