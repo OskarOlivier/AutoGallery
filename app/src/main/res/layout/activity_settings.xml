@@ -124,8 +124,8 @@
                     android:id="@+id/slideDurationSlider"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:valueFrom="1"
-                    android:valueTo="30"
+                    android:valueFrom="5"
+                    android:valueTo="300"
                     android:value="5"
                     android:stepSize="1"
                     android:layout_marginBottom="16dp" />
@@ -154,6 +154,44 @@
                     android:id="@+id/transitionTypeSpinner"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Zoom Effect"
+                    android:textAppearance="?attr/textAppearanceBodyLarge"
+                    android:layout_marginBottom="8dp" />
+
+                <Spinner
+                    android:id="@+id/zoomTypeSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Zoom Amount"
+                    android:textAppearance="?attr/textAppearanceBodyLarge"
+                    android:layout_marginBottom="8dp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/zoomAmountText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="103% zoom"
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:layout_marginBottom="8dp" />
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/zoomAmountSlider"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:valueFrom="0"
+                    android:valueTo="5"
+                    android:value="3"
+                    android:stepSize="1"
                     android:layout_marginBottom="16dp" />
 
                 <com.google.android.material.checkbox.MaterialCheckBox

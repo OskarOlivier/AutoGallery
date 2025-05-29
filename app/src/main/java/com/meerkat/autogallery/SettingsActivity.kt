@@ -32,6 +32,9 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var slideDurationText: MaterialTextView
     private lateinit var orderTypeSpinner: Spinner
     private lateinit var transitionTypeSpinner: Spinner
+    private lateinit var zoomTypeSpinner: Spinner
+    private lateinit var zoomAmountSlider: Slider
+    private lateinit var zoomAmountText: MaterialTextView
     private lateinit var blurredBackgroundCheckbox: MaterialCheckBox
     private lateinit var chargingOnlyCheckbox: MaterialCheckBox
     private lateinit var alwaysEnabledCheckbox: MaterialCheckBox
@@ -82,6 +85,9 @@ class SettingsActivity : AppCompatActivity() {
         slideDurationText = findViewById(R.id.slideDurationText)
         orderTypeSpinner = findViewById(R.id.orderTypeSpinner)
         transitionTypeSpinner = findViewById(R.id.transitionTypeSpinner)
+        zoomTypeSpinner = findViewById(R.id.zoomTypeSpinner)
+        zoomAmountSlider = findViewById(R.id.zoomAmountSlider)
+        zoomAmountText = findViewById(R.id.zoomAmountText)
         blurredBackgroundCheckbox = findViewById(R.id.blurredBackgroundCheckbox)
         chargingOnlyCheckbox = findViewById(R.id.chargingOnlyCheckbox)
         alwaysEnabledCheckbox = findViewById(R.id.alwaysEnabledCheckbox)
@@ -108,6 +114,12 @@ class SettingsActivity : AppCompatActivity() {
         val transitionAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, transitionTypes)
         transitionAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         transitionTypeSpinner.adapter = transitionAdapter
+
+        // Zoom type spinner
+        val zoomTypes = ZoomType.values().map { it.displayName }
+        val zoomAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, zoomTypes)
+        zoomAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        zoomTypeSpinner.adapter = zoomAdapter
     }
 
     private fun loadCurrentSettings() {
@@ -116,6 +128,10 @@ class SettingsActivity : AppCompatActivity() {
 
         orderTypeSpinner.setSelection(settings.orderType.ordinal)
         transitionTypeSpinner.setSelection(settings.transitionType.ordinal)
+        zoomTypeSpinner.setSelection(settings.zoomType.ordinal)
+
+        zoomAmountSlider.value = settings.zoomAmount.toFloat()
+        updateZoomAmountText(settings.zoomAmount)
 
         blurredBackgroundCheckbox.isChecked = settings.enableBlurredBackground
         chargingOnlyCheckbox.isChecked = settings.enableOnCharging
@@ -133,12 +149,23 @@ class SettingsActivity : AppCompatActivity() {
             updateSlideDurationText(value.toInt())
         }
 
+        zoomAmountSlider.addOnChangeListener { _, value, _ ->
+            updateZoomAmountText(value.toInt())
+        }
+
         // Save settings when any option changes
         val saveSettingsListener = {
             saveCurrentSettings()
         }
 
         slideDurationSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                saveCurrentSettings()
+            }
+        })
+
+        zoomAmountSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
             override fun onStartTrackingTouch(slider: Slider) {}
             override fun onStopTrackingTouch(slider: Slider) {
                 saveCurrentSettings()
@@ -155,7 +182,22 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun updateSlideDurationText(seconds: Int) {
-        slideDurationText.text = "${seconds}s per slide"
+        val text = if (seconds < 60) {
+            "${seconds}s per slide"
+        } else {
+            val minutes = seconds / 60
+            val remainingSeconds = seconds % 60
+            if (remainingSeconds == 0) {
+                "${minutes}m per slide"
+            } else {
+                "${minutes}m ${remainingSeconds}s per slide"
+            }
+        }
+        slideDurationText.text = text
+    }
+
+    private fun updateZoomAmountText(zoomAmount: Int) {
+        zoomAmountText.text = "${100 + zoomAmount}% zoom"
     }
 
     private fun updateSelectedPhotos() {
@@ -183,6 +225,8 @@ class SettingsActivity : AppCompatActivity() {
             slideDuration = (slideDurationSlider.value * 1000).toInt(),
             orderType = OrderType.values()[orderTypeSpinner.selectedItemPosition],
             transitionType = TransitionType.values()[transitionTypeSpinner.selectedItemPosition],
+            zoomType = ZoomType.values()[zoomTypeSpinner.selectedItemPosition],
+            zoomAmount = zoomAmountSlider.value.toInt(),
             enableBlurredBackground = blurredBackgroundCheckbox.isChecked,
             enableOnCharging = chargingOnlyCheckbox.isChecked,
             enableAlways = alwaysEnabledCheckbox.isChecked

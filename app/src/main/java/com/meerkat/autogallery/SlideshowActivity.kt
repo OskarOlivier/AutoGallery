@@ -9,14 +9,19 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Matrix
 import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import android.view.View
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.view.animation.AccelerateDecelerateInterpolator
 import androidx.appcompat.app.AppCompatActivity
@@ -26,6 +31,8 @@ import com.bumptech.glide.request.target.SimpleTarget
 import com.bumptech.glide.request.transition.Transition
 import android.widget.ImageView
 import jp.wasabeef.glide.transformations.BlurTransformation
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.random.Random
 
 class SlideshowActivity : AppCompatActivity() {
@@ -46,6 +53,11 @@ class SlideshowActivity : AppCompatActivity() {
     private var hasStartedSlideshow = false
     private var startTime = 0L
     private var shouldIgnoreScreenOn = true
+    private var isReceiverRegistered = false
+
+    // Screen dimension variables for custom image fitting
+    private var screenWidth = 0
+    private var screenHeight = 0
 
     companion object {
         private const val TAG = "SlideshowActivity"
@@ -84,26 +96,13 @@ class SlideshowActivity : AppCompatActivity() {
         Log.d(TAG, "onCreate called at $startTime")
 
         try {
-            // Setup fullscreen and keep screen on
-            window.setFlags(
-                WindowManager.LayoutParams.FLAG_FULLSCREEN or
-                        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
-                WindowManager.LayoutParams.FLAG_FULLSCREEN or
-                        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-            )
+            // Get screen dimensions first
+            getScreenDimensions()
 
             setContentView(R.layout.activity_slideshow)
 
-            // Hide navigation bar
-            window.decorView.systemUiVisibility = (
-                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                            View.SYSTEM_UI_FLAG_FULLSCREEN or
-                            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                    )
+            // Setup modern fullscreen AFTER setContentView
+            setupFullscreen()
 
             initViews()
             loadSettings()
@@ -133,6 +132,55 @@ class SlideshowActivity : AppCompatActivity() {
         }
     }
 
+    private fun getScreenDimensions() {
+        val metrics = resources.displayMetrics
+        screenWidth = metrics.widthPixels
+        screenHeight = metrics.heightPixels
+        Log.d(TAG, "Screen dimensions: ${screenWidth}x${screenHeight}")
+    }
+
+    private fun setupFullscreen() {
+        // Set window flags
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_FULLSCREEN or
+                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
+            WindowManager.LayoutParams.FLAG_FULLSCREEN or
+                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+        )
+
+        // Modern fullscreen approach
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11+ (API 30+)
+            window.insetsController?.let { controller ->
+                controller.hide(WindowInsets.Type.systemBars())
+                controller.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        } else {
+            // Fallback for Android 10 and earlier
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = (
+                    View.SYSTEM_UI_FLAG_FULLSCREEN or
+                            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                            View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+                            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    )
+        }
+
+        // Handle display cutouts (notches) for Android 9+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+
+        Log.d(TAG, "Fullscreen setup completed")
+    }
+
     private fun initViews() {
         currentImageView = findViewById(R.id.currentImageView)
         nextImageView = findViewById(R.id.nextImageView)
@@ -149,7 +197,7 @@ class SlideshowActivity : AppCompatActivity() {
         settings = preferencesManager.loadSettings()
         photoList = settings.selectedPhotos.toMutableList()
 
-        Log.d(TAG, "Loaded ${photoList.size} photos")
+        Log.d(TAG, "Loaded ${photoList.size} photos, zoom type: ${settings.zoomType}")
 
         if (photoList.isEmpty()) {
             return
@@ -209,9 +257,11 @@ class SlideshowActivity : AppCompatActivity() {
                 addAction(Intent.ACTION_USER_PRESENT)
             }
             registerReceiver(screenStateReceiver, filter)
+            isReceiverRegistered = true
             Log.d(TAG, "Screen state receiver registered")
         } catch (e: Exception) {
             Log.e(TAG, "Error registering screen state receiver", e)
+            isReceiverRegistered = false
         }
     }
 
@@ -229,20 +279,25 @@ class SlideshowActivity : AppCompatActivity() {
         val currentUri = Uri.parse(photoList[currentPhotoIndex])
         Log.d(TAG, "Loading image ${currentPhotoIndex + 1}/${photoList.size}: $currentUri")
 
-        // Load image into next ImageView with error handling
+        // Load image with custom fitting logic
         Glide.with(this)
             .load(currentUri)
-            .centerInside()
             .error(R.drawable.ic_photo_library) // Show placeholder on error
-            .into(object : SimpleTarget<android.graphics.drawable.Drawable>() {
+            .into(object : SimpleTarget<Drawable>() {
                 override fun onResourceReady(
-                    resource: android.graphics.drawable.Drawable,
-                    transition: Transition<in android.graphics.drawable.Drawable>?
+                    resource: Drawable,
+                    transition: Transition<in Drawable>?
                 ) {
                     if (!isActivityActive) return
 
                     Log.d(TAG, "Image loaded successfully")
-                    nextImageView.setImageDrawable(resource)
+
+                    // Apply custom fitting logic
+                    val fittedDrawable = applyCustomFitting(resource)
+                    nextImageView.setImageDrawable(fittedDrawable)
+
+                    // Set correct initial scale for SINE_WAVE pattern BEFORE transition
+                    setInitialScaleForNextImage()
 
                     // Load blurred background if enabled
                     if (settings.enableBlurredBackground) {
@@ -252,10 +307,13 @@ class SlideshowActivity : AppCompatActivity() {
                     }
                 }
 
-                override fun onLoadFailed(errorDrawable: android.graphics.drawable.Drawable?) {
+                override fun onLoadFailed(errorDrawable: Drawable?) {
                     Log.e(TAG, "Failed to load image: $currentUri")
                     // Set a placeholder and continue
                     nextImageView.setImageResource(R.drawable.ic_photo_library)
+
+                    // Set correct initial scale even for placeholder
+                    setInitialScaleForNextImage()
 
                     // Still try to load background or proceed with transition
                     if (settings.enableBlurredBackground) {
@@ -267,6 +325,71 @@ class SlideshowActivity : AppCompatActivity() {
             })
     }
 
+    private fun applyCustomFitting(drawable: Drawable): Drawable {
+        val imageWidth = drawable.intrinsicWidth
+        val imageHeight = drawable.intrinsicHeight
+
+        if (imageWidth <= 0 || imageHeight <= 0) {
+            Log.w(TAG, "Invalid image dimensions, using original")
+            return drawable
+        }
+
+        // Calculate aspect ratios
+        val imageAspectRatio = imageWidth.toFloat() / imageHeight.toFloat()
+        val screenAspectRatio = screenWidth.toFloat() / screenHeight.toFloat()
+
+        // Calculate scale factor to ensure image touches at least 2 edges
+        val scaleFactor = if (imageAspectRatio > screenAspectRatio) {
+            // Image is wider than screen - scale to height
+            screenHeight.toFloat() / imageHeight.toFloat()
+        } else {
+            // Image is taller than screen - scale to width
+            screenWidth.toFloat() / imageWidth.toFloat()
+        }
+
+        // Only scale up if the image is smaller than the screen
+        val finalScale = max(scaleFactor, 1.0f)
+
+        if (finalScale == 1.0f) {
+            Log.d(TAG, "No scaling needed for image ${imageWidth}x${imageHeight}")
+            return drawable
+        }
+
+        Log.d(TAG, "Scaling image ${imageWidth}x${imageHeight} by factor ${finalScale}")
+
+        // Create scaled bitmap
+        val bitmap = drawableToBitmap(drawable)
+        val scaledWidth = (imageWidth * finalScale).toInt()
+        val scaledHeight = (imageHeight * finalScale).toInt()
+
+        val scaledBitmap = Bitmap.createScaledBitmap(bitmap, scaledWidth, scaledHeight, true)
+        return BitmapDrawable(resources, scaledBitmap)
+    }
+
+    private fun setInitialScaleForNextImage() {
+        // Calculate zoom scale from zoom amount setting (1-5 becomes 1.01-1.05)
+        val zoomScale = 1f + (settings.zoomAmount / 100f)
+
+        // For SINE_WAVE pattern, set the correct starting scale for the next image
+        if (settings.zoomType == ZoomType.SINE_WAVE) {
+            if (currentPhotoIndex % 2 == 1) {
+                // Current image being loaded is odd index, should start zoomed
+                nextImageView.scaleX = zoomScale
+                nextImageView.scaleY = zoomScale
+                Log.d(TAG, "Set initial scale $zoomScale for image at index $currentPhotoIndex")
+            } else {
+                // Current image being loaded is even index, should start normal
+                nextImageView.scaleX = 1.0f
+                nextImageView.scaleY = 1.0f
+                Log.d(TAG, "Set initial scale 1.0 for image at index $currentPhotoIndex")
+            }
+        } else {
+            // For SAWTOOTH, always start at normal scale
+            nextImageView.scaleX = 1.0f
+            nextImageView.scaleY = 1.0f
+        }
+    }
+
     private fun loadBlurredBackground(uri: Uri) {
         // Use Glide with high-quality BlurTransformation
         Glide.with(this)
@@ -276,10 +399,10 @@ class SlideshowActivity : AppCompatActivity() {
                 BlurTransformation(25, 3) // radius: 25, sampling: 3 for high quality
             )
             .error(R.drawable.ic_photo_library)
-            .into(object : SimpleTarget<android.graphics.drawable.Drawable>() {
+            .into(object : SimpleTarget<Drawable>() {
                 override fun onResourceReady(
-                    resource: android.graphics.drawable.Drawable,
-                    transition: Transition<in android.graphics.drawable.Drawable>?
+                    resource: Drawable,
+                    transition: Transition<in Drawable>?
                 ) {
                     if (!isActivityActive) return
 
@@ -292,7 +415,7 @@ class SlideshowActivity : AppCompatActivity() {
                     performTransition()
                 }
 
-                override fun onLoadFailed(errorDrawable: android.graphics.drawable.Drawable?) {
+                override fun onLoadFailed(errorDrawable: Drawable?) {
                     Log.w(TAG, "Failed to load blurred background, using solid background")
                     // Set a solid dark background as fallback
                     nextBackgroundImageView.setBackgroundColor(0xFF000000.toInt())
@@ -302,7 +425,7 @@ class SlideshowActivity : AppCompatActivity() {
             })
     }
 
-    private fun drawableToBitmap(drawable: android.graphics.drawable.Drawable): Bitmap {
+    private fun drawableToBitmap(drawable: Drawable): Bitmap {
         if (drawable is BitmapDrawable) {
             return drawable.bitmap
         }
@@ -383,8 +506,8 @@ class SlideshowActivity : AppCompatActivity() {
     }
 
     private fun createSlideTransition(deltaX: Float, deltaY: Float): AnimatorSet {
-        val screenWidth = resources.displayMetrics.widthPixels.toFloat()
-        val screenHeight = resources.displayMetrics.heightPixels.toFloat()
+        val screenWidthFloat = screenWidth.toFloat()
+        val screenHeightFloat = screenHeight.toFloat()
 
         val imageSlideOut: ObjectAnimator
         val imageSlideIn: ObjectAnimator
@@ -394,30 +517,30 @@ class SlideshowActivity : AppCompatActivity() {
         if (deltaX != 0f) {
             // Horizontal slide
             imageSlideOut = ObjectAnimator.ofFloat(
-                currentImageView, "translationX", 0f, deltaX * screenWidth
+                currentImageView, "translationX", 0f, deltaX * screenWidthFloat
             )
             imageSlideIn = ObjectAnimator.ofFloat(
-                nextImageView, "translationX", -deltaX * screenWidth, 0f
+                nextImageView, "translationX", -deltaX * screenWidthFloat, 0f
             )
             backgroundSlideOut = ObjectAnimator.ofFloat(
-                currentBackgroundImageView, "translationX", 0f, deltaX * screenWidth
+                currentBackgroundImageView, "translationX", 0f, deltaX * screenWidthFloat
             )
             backgroundSlideIn = ObjectAnimator.ofFloat(
-                nextBackgroundImageView, "translationX", -deltaX * screenWidth, 0f
+                nextBackgroundImageView, "translationX", -deltaX * screenWidthFloat, 0f
             )
         } else {
             // Vertical slide
             imageSlideOut = ObjectAnimator.ofFloat(
-                currentImageView, "translationY", 0f, deltaY * screenHeight
+                currentImageView, "translationY", 0f, deltaY * screenHeightFloat
             )
             imageSlideIn = ObjectAnimator.ofFloat(
-                nextImageView, "translationY", -deltaY * screenHeight, 0f
+                nextImageView, "translationY", -deltaY * screenHeightFloat, 0f
             )
             backgroundSlideOut = ObjectAnimator.ofFloat(
-                currentBackgroundImageView, "translationY", 0f, deltaY * screenHeight
+                currentBackgroundImageView, "translationY", 0f, deltaY * screenHeightFloat
             )
             backgroundSlideIn = ObjectAnimator.ofFloat(
-                nextBackgroundImageView, "translationY", -deltaY * screenHeight, 0f
+                nextBackgroundImageView, "translationY", -deltaY * screenHeightFloat, 0f
             )
         }
 
@@ -458,9 +581,33 @@ class SlideshowActivity : AppCompatActivity() {
         // Cancel any existing zoom animation
         currentZoomAnimator?.cancel()
 
-        // Create zoom animation from current scale to 1.03 (3% zoom)
-        val scaleXAnimator = ObjectAnimator.ofFloat(currentImageView, "scaleX", 1f, 1.03f)
-        val scaleYAnimator = ObjectAnimator.ofFloat(currentImageView, "scaleY", 1f, 1.03f)
+        // Calculate zoom scale from zoom amount setting (1-5 becomes 1.01-1.05)
+        val zoomScale = 1f + (settings.zoomAmount / 100f)
+
+        // Determine zoom direction based on zoom type and current photo index
+        val (startScale, endScale) = when (settings.zoomType) {
+            ZoomType.SAWTOOTH -> {
+                // Always zoom in from 1.0 to zoomScale
+                Pair(1f, zoomScale)
+            }
+            ZoomType.SINE_WAVE -> {
+                // Alternate zoom direction based on photo index
+                if (currentPhotoIndex % 2 == 0) {
+                    // Even index: zoom in
+                    Pair(1f, zoomScale)
+                } else {
+                    // Odd index: zoom out (start from zoomed and go to normal)
+                    Pair(zoomScale, 1f)
+                }
+            }
+        }
+
+        Log.d(TAG, "Starting zoom effect: ${startScale} -> ${endScale} for photo index $currentPhotoIndex (zoom amount: ${settings.zoomAmount}%)")
+
+        // The currentImageView should already have the correct starting scale from the previous transition
+        // Create zoom animation from current scale to target scale
+        val scaleXAnimator = ObjectAnimator.ofFloat(currentImageView, "scaleX", startScale, endScale)
+        val scaleYAnimator = ObjectAnimator.ofFloat(currentImageView, "scaleY", startScale, endScale)
 
         // Set duration to match slide duration
         val duration = settings.slideDuration.toLong()
@@ -473,10 +620,8 @@ class SlideshowActivity : AppCompatActivity() {
         scaleYAnimator.interpolator = interpolator
 
         // Create animator set to play both scale animations together
-        currentZoomAnimator = ObjectAnimator()
         val animatorSet = AnimatorSet()
         animatorSet.playTogether(scaleXAnimator, scaleYAnimator)
-
         animatorSet.start()
 
         // Store reference to the animator set for potential cancellation
@@ -537,11 +682,14 @@ class SlideshowActivity : AppCompatActivity() {
         slideshowRunnable?.let { handler.removeCallbacks(it) }
         currentZoomAnimator?.cancel()
 
-        try {
-            unregisterReceiver(screenStateReceiver)
-            Log.d(TAG, "Screen state receiver unregistered")
-        } catch (e: Exception) {
-            Log.w(TAG, "Error unregistering receiver (may not have been registered)", e)
+        if (isReceiverRegistered) {
+            try {
+                unregisterReceiver(screenStateReceiver)
+                isReceiverRegistered = false
+                Log.d(TAG, "Screen state receiver unregistered")
+            } catch (e: Exception) {
+                Log.w(TAG, "Error unregistering receiver", e)
+            }
         }
     }
 
