@@ -25,6 +25,7 @@ import com.bumptech.glide.load.resource.bitmap.CenterCrop
 import com.bumptech.glide.request.target.SimpleTarget
 import com.bumptech.glide.request.transition.Transition
 import android.widget.ImageView
+import jp.wasabeef.glide.transformations.BlurTransformation
 import java.io.File
 import kotlin.random.Random
 
@@ -191,14 +192,22 @@ class SlideshowActivity : AppCompatActivity() {
     }
 
     private fun loadBlurredBackground(uri: Uri) {
+        // Use Glide with high-quality BlurTransformation
         Glide.with(this)
-            .asBitmap()
             .load(uri)
-            .transform(CenterCrop())
-            .into(object : SimpleTarget<Bitmap>() {
-                override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
-                    val blurredBitmap = createSimpleBlur(resource)
-                    nextBackgroundImageView.setImageBitmap(blurredBitmap)
+            .transform(
+                CenterCrop(),
+                BlurTransformation(25, 3) // radius: 25, sampling: 3 for high quality
+            )
+            .into(object : SimpleTarget<android.graphics.drawable.Drawable>() {
+                override fun onResourceReady(
+                    resource: android.graphics.drawable.Drawable,
+                    transition: Transition<in android.graphics.drawable.Drawable>?
+                ) {
+                    // Apply additional darkening overlay for better contrast
+                    val bitmap = drawableToBitmap(resource)
+                    val darkenedBitmap = applyDarkenOverlay(bitmap)
+                    nextBackgroundImageView.setImageBitmap(darkenedBitmap)
 
                     // Now perform the transition with both image and background ready
                     performTransition()
@@ -206,25 +215,32 @@ class SlideshowActivity : AppCompatActivity() {
             })
     }
 
-    private fun createSimpleBlur(originalBitmap: Bitmap): Bitmap {
-        // Create a simple blur effect by scaling down and up
-        val width = originalBitmap.width
-        val height = originalBitmap.height
+    private fun drawableToBitmap(drawable: android.graphics.drawable.Drawable): Bitmap {
+        if (drawable is BitmapDrawable) {
+            return drawable.bitmap
+        }
 
-        // Scale down to 1/8 size
-        val smallBitmap = Bitmap.createScaledBitmap(originalBitmap, width / 8, height / 8, false)
+        val bitmap = Bitmap.createBitmap(
+            drawable.intrinsicWidth,
+            drawable.intrinsicHeight,
+            Bitmap.Config.ARGB_8888
+        )
 
-        // Scale back up with filtering for blur effect
-        val blurredBitmap = Bitmap.createScaledBitmap(smallBitmap, width, height, true)
+        val canvas = Canvas(bitmap)
+        drawable.setBounds(0, 0, canvas.width, canvas.height)
+        drawable.draw(canvas)
 
-        // Create a new bitmap for the final result
-        val resultBitmap = blurredBitmap.copy(Bitmap.Config.ARGB_8888, true)
+        return bitmap
+    }
+
+    private fun applyDarkenOverlay(bitmap: Bitmap): Bitmap {
+        val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(result)
 
         // Apply color overlay for better visual effect
-        val canvas = Canvas(resultBitmap)
         canvas.drawColor(0x40000000) // Semi-transparent black overlay
 
-        return resultBitmap
+        return result
     }
 
     private fun performTransition() {
