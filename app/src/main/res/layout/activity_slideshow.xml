@@ -2,32 +2,39 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/black">
+    android:background="@color/black"
+    android:fitsSystemWindows="false">
 
+    <!-- Background image views for blurred background effect -->
     <ImageView
         android:id="@+id/currentBackgroundImageView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:scaleType="centerCrop" />
+        android:scaleType="centerCrop"
+        android:contentDescription="Background image" />
 
     <ImageView
         android:id="@+id/nextBackgroundImageView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:scaleType="centerCrop"
-        android:alpha="0" />
+        android:alpha="0"
+        android:contentDescription="Next background image" />
 
+    <!-- Main image views for the slideshow -->
     <ImageView
         android:id="@+id/currentImageView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:scaleType="centerInside" />
+        android:scaleType="centerInside"
+        android:contentDescription="Current slideshow image" />
 
     <ImageView
         android:id="@+id/nextImageView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:scaleType="centerInside"
-        android:alpha="0" />
+        android:alpha="0"
+        android:contentDescription="Next slideshow image" />
 
 </FrameLayout>

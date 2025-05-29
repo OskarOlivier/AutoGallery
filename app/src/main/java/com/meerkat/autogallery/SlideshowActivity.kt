@@ -103,6 +103,7 @@ class SlideshowActivity : AppCompatActivity() {
 
             // Setup modern fullscreen AFTER setContentView
             setupFullscreen()
+            setupUIVisibilityListener()
 
             initViews()
             loadSettings()
@@ -140,7 +141,7 @@ class SlideshowActivity : AppCompatActivity() {
     }
 
     private fun setupFullscreen() {
-        // Set window flags
+        // Set window flags first
         window.setFlags(
             WindowManager.LayoutParams.FLAG_FULLSCREEN or
                     WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
@@ -152,12 +153,24 @@ class SlideshowActivity : AppCompatActivity() {
                     WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
         )
 
-        // Modern fullscreen approach
+        // Handle display cutouts (notches) for Android 9+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+
+        // Modern fullscreen approach for Android 11+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // Android 11+ (API 30+)
+            // Android 11+ (API 30+) - Use WindowInsetsController
             window.insetsController?.let { controller ->
+                // Hide both status bar and navigation bar
                 controller.hide(WindowInsets.Type.systemBars())
+
+                // Set behavior to show bars temporarily on swipe
                 controller.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+
+                // Additional: Make sure the layout goes behind system bars
+                window.setDecorFitsSystemWindows(false)
             }
         } else {
             // Fallback for Android 10 and earlier
@@ -172,13 +185,44 @@ class SlideshowActivity : AppCompatActivity() {
                     )
         }
 
-        // Handle display cutouts (notches) for Android 9+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            window.attributes.layoutInDisplayCutoutMode =
-                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        // Additional fix: Handle edge-to-edge display properly
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Ensure content goes edge-to-edge
+            window.statusBarColor = android.graphics.Color.TRANSPARENT
+            window.navigationBarColor = android.graphics.Color.TRANSPARENT
         }
 
-        Log.d(TAG, "Fullscreen setup completed")
+        Log.d(TAG, "Fullscreen setup completed for Android ${Build.VERSION.SDK_INT}")
+    }
+
+    private fun setupUIVisibilityListener() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // For Android 11+, listen for insets changes
+            window.decorView.setOnApplyWindowInsetsListener { _, insets ->
+                val systemBars = insets.getInsets(WindowInsets.Type.systemBars())
+                if (systemBars.top > 0 || systemBars.bottom > 0) {
+                    // System bars became visible, hide them again
+                    window.insetsController?.hide(WindowInsets.Type.systemBars())
+                }
+                insets
+            }
+        } else {
+            // For older Android versions
+            window.decorView.setOnSystemUiVisibilityChangeListener { visibility ->
+                if (visibility and View.SYSTEM_UI_FLAG_FULLSCREEN == 0) {
+                    // System UI became visible, hide it again
+                    @Suppress("DEPRECATION")
+                    window.decorView.systemUiVisibility = (
+                            View.SYSTEM_UI_FLAG_FULLSCREEN or
+                                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                                    View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+                                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                            )
+                }
+            }
+        }
     }
 
     private fun initViews() {

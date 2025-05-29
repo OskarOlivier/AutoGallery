@@ -38,11 +38,15 @@
             android:label="@string/settings_title"
             android:parentActivityName=".MainActivity" />
 
+        <!-- Updated slideshow activity with edge-to-edge theme -->
         <activity
             android:name=".SlideshowActivity"
             android:exported="false"
-            android:theme="@style/Theme.AutoGallery.Fullscreen"
-            android:launchMode="singleTask" />
+            android:theme="@style/Theme.AutoGallery.Fullscreen.EdgeToEdge"
+            android:launchMode="singleTask"
+            android:screenOrientation="unspecified"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            tools:ignore="LockedOrientationActivity" />
 
         <service
             android:name=".ScreenStateService"
