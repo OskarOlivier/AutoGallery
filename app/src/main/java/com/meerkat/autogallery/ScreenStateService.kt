@@ -107,7 +107,7 @@ class ScreenStateService : Service() {
             } else {
                 Log.d(TAG, "Slideshow start cancelled - screen state changed")
             }
-        }, 2000) // 2 second delay
+        }, 1500) // Reduced delay to 1.5 seconds
     }
 
     private fun isDeviceCharging(): Boolean {
@@ -126,9 +126,15 @@ class ScreenStateService : Service() {
         try {
             slideshowStarted = true
             val intent = Intent(this, SlideshowActivity::class.java).apply {
+                // Use flags that ensure the slideshow starts cleanly without showing MainActivity
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        Intent.FLAG_ACTIVITY_CLEAR_TASK or
+                        Intent.FLAG_ACTIVITY_NO_HISTORY or
+                        Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS or
+                        Intent.FLAG_ACTIVITY_NO_ANIMATION
+
+                // Add extra to indicate this is started from service
+                putExtra("STARTED_FROM_SERVICE", true)
             }
             startActivity(intent)
             Log.d(TAG, "Slideshow activity started")
