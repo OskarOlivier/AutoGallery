@@ -5,10 +5,17 @@
     android:background="@color/black">
 
     <ImageView
-        android:id="@+id/backgroundImageView"
+        android:id="@+id/currentBackgroundImageView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:scaleType="centerCrop" />
+
+    <ImageView
+        android:id="@+id/nextBackgroundImageView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:alpha="0" />
 
     <ImageView
         android:id="@+id/currentImageView"

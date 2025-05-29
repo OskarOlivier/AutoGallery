@@ -32,7 +32,8 @@ class SlideshowActivity : AppCompatActivity() {
 
     private lateinit var currentImageView: ImageView
     private lateinit var nextImageView: ImageView
-    private lateinit var backgroundImageView: ImageView
+    private lateinit var currentBackgroundImageView: ImageView
+    private lateinit var nextBackgroundImageView: ImageView
 
     private lateinit var preferencesManager: PreferencesManager
     private lateinit var settings: GallerySettings
@@ -85,10 +86,12 @@ class SlideshowActivity : AppCompatActivity() {
     private fun initViews() {
         currentImageView = findViewById(R.id.currentImageView)
         nextImageView = findViewById(R.id.nextImageView)
-        backgroundImageView = findViewById(R.id.backgroundImageView)
+        currentBackgroundImageView = findViewById(R.id.currentBackgroundImageView)
+        nextBackgroundImageView = findViewById(R.id.nextBackgroundImageView)
 
-        // Initially hide the next image view
+        // Initially hide the next image views
         nextImageView.alpha = 0f
+        nextBackgroundImageView.alpha = 0f
     }
 
     private fun loadSettings() {
@@ -179,10 +182,10 @@ class SlideshowActivity : AppCompatActivity() {
                     // Load blurred background if enabled
                     if (settings.enableBlurredBackground) {
                         loadBlurredBackground(currentUri)
+                    } else {
+                        // Even if blurred background is disabled, we should perform the transition
+                        performTransition()
                     }
-
-                    // Perform transition animation
-                    performTransition()
                 }
             })
     }
@@ -195,7 +198,10 @@ class SlideshowActivity : AppCompatActivity() {
             .into(object : SimpleTarget<Bitmap>() {
                 override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
                     val blurredBitmap = createSimpleBlur(resource)
-                    backgroundImageView.setImageBitmap(blurredBitmap)
+                    nextBackgroundImageView.setImageBitmap(blurredBitmap)
+
+                    // Now perform the transition with both image and background ready
+                    performTransition()
                 }
             })
     }
@@ -237,18 +243,31 @@ class SlideshowActivity : AppCompatActivity() {
     }
 
     private fun createFadeTransition(): AnimatorSet {
-        val fadeOut = ObjectAnimator.ofFloat(currentImageView, "alpha", 1f, 0f)
-        val fadeIn = ObjectAnimator.ofFloat(nextImageView, "alpha", 0f, 1f)
+        val imageFadeOut = ObjectAnimator.ofFloat(currentImageView, "alpha", 1f, 0f)
+        val imageFadeIn = ObjectAnimator.ofFloat(nextImageView, "alpha", 0f, 1f)
 
-        fadeOut.duration = 500
-        fadeIn.duration = 500
+        val backgroundFadeOut = ObjectAnimator.ofFloat(currentBackgroundImageView, "alpha", 1f, 0f)
+        val backgroundFadeIn = ObjectAnimator.ofFloat(nextBackgroundImageView, "alpha", 0f, 1f)
+
+        imageFadeOut.duration = 500
+        imageFadeIn.duration = 500
+        backgroundFadeOut.duration = 500
+        backgroundFadeIn.duration = 500
 
         val animatorSet = AnimatorSet()
-        animatorSet.playTogether(fadeOut, fadeIn)
+
+        if (settings.enableBlurredBackground) {
+            animatorSet.playTogether(imageFadeOut, imageFadeIn, backgroundFadeOut, backgroundFadeIn)
+        } else {
+            animatorSet.playTogether(imageFadeOut, imageFadeIn)
+        }
 
         animatorSet.addListener(object : android.animation.AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: android.animation.Animator) {
                 swapImageViews()
+                if (settings.enableBlurredBackground) {
+                    swapBackgroundViews()
+                }
                 startSubtleZoomEffect()
             }
         })
@@ -260,42 +279,65 @@ class SlideshowActivity : AppCompatActivity() {
         val screenWidth = resources.displayMetrics.widthPixels.toFloat()
         val screenHeight = resources.displayMetrics.heightPixels.toFloat()
 
-        val slideOut: ObjectAnimator
-        val slideIn: ObjectAnimator
+        val imageSlideOut: ObjectAnimator
+        val imageSlideIn: ObjectAnimator
+        val backgroundSlideOut: ObjectAnimator
+        val backgroundSlideIn: ObjectAnimator
 
         if (deltaX != 0f) {
             // Horizontal slide
-            slideOut = ObjectAnimator.ofFloat(
+            imageSlideOut = ObjectAnimator.ofFloat(
                 currentImageView, "translationX", 0f, deltaX * screenWidth
             )
-            slideIn = ObjectAnimator.ofFloat(
+            imageSlideIn = ObjectAnimator.ofFloat(
                 nextImageView, "translationX", -deltaX * screenWidth, 0f
+            )
+            backgroundSlideOut = ObjectAnimator.ofFloat(
+                currentBackgroundImageView, "translationX", 0f, deltaX * screenWidth
+            )
+            backgroundSlideIn = ObjectAnimator.ofFloat(
+                nextBackgroundImageView, "translationX", -deltaX * screenWidth, 0f
             )
         } else {
             // Vertical slide
-            slideOut = ObjectAnimator.ofFloat(
+            imageSlideOut = ObjectAnimator.ofFloat(
                 currentImageView, "translationY", 0f, deltaY * screenHeight
             )
-            slideIn = ObjectAnimator.ofFloat(
+            imageSlideIn = ObjectAnimator.ofFloat(
                 nextImageView, "translationY", -deltaY * screenHeight, 0f
+            )
+            backgroundSlideOut = ObjectAnimator.ofFloat(
+                currentBackgroundImageView, "translationY", 0f, deltaY * screenHeight
+            )
+            backgroundSlideIn = ObjectAnimator.ofFloat(
+                nextBackgroundImageView, "translationY", -deltaY * screenHeight, 0f
             )
         }
 
         nextImageView.alpha = 1f
+        nextBackgroundImageView.alpha = 1f
 
-        slideOut.duration = 800
-        slideIn.duration = 800
+        imageSlideOut.duration = 800
+        imageSlideIn.duration = 800
+        backgroundSlideOut.duration = 800
+        backgroundSlideIn.duration = 800
 
         val animatorSet = AnimatorSet()
-        animatorSet.playTogether(slideOut, slideIn)
+
+        if (settings.enableBlurredBackground) {
+            animatorSet.playTogether(imageSlideOut, imageSlideIn, backgroundSlideOut, backgroundSlideIn)
+        } else {
+            animatorSet.playTogether(imageSlideOut, imageSlideIn)
+        }
 
         animatorSet.addListener(object : android.animation.AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: android.animation.Animator) {
                 swapImageViews()
-                currentImageView.translationX = 0f
-                currentImageView.translationY = 0f
-                nextImageView.translationX = 0f
-                nextImageView.translationY = 0f
+
+                if (settings.enableBlurredBackground) {
+                    swapBackgroundViews()
+                }
+
                 startSubtleZoomEffect()
             }
         })
@@ -307,11 +349,8 @@ class SlideshowActivity : AppCompatActivity() {
         // Cancel any existing zoom animation
         currentZoomAnimator?.cancel()
 
-        // Reset scale in case there was a previous animation
-        currentImageView.scaleX = 1f
-        currentImageView.scaleY = 1f
-
-        // Create zoom animation from 1.0 to 1.03 (3% zoom)
+        // The view should already be at scale 1f from the swap, so no need to reset
+        // Create zoom animation from current scale to 1.03 (3% zoom)
         val scaleXAnimator = ObjectAnimator.ofFloat(currentImageView, "scaleX", 1f, 1.03f)
         val scaleYAnimator = ObjectAnimator.ofFloat(currentImageView, "scaleY", 1f, 1.03f)
 
@@ -341,7 +380,25 @@ class SlideshowActivity : AppCompatActivity() {
         currentImageView = nextImageView
         nextImageView = temp
 
+        // Reset the next view for the next cycle
         nextImageView.alpha = 0f
+        nextImageView.scaleX = 1f
+        nextImageView.scaleY = 1f
+        nextImageView.translationX = 0f
+        nextImageView.translationY = 0f
+    }
+
+    private fun swapBackgroundViews() {
+        val temp = currentBackgroundImageView
+        currentBackgroundImageView = nextBackgroundImageView
+        nextBackgroundImageView = temp
+
+        // Reset the next background view for the next cycle
+        nextBackgroundImageView.alpha = 0f
+        nextBackgroundImageView.scaleX = 1f
+        nextBackgroundImageView.scaleY = 1f
+        nextBackgroundImageView.translationX = 0f
+        nextBackgroundImageView.translationY = 0f
     }
 
     private fun scheduleNextImage() {
