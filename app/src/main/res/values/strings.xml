@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Auto Gallery</string>
+    <string name="settings_title">Settings</string>
+    <string name="enable_auto_gallery">Enable Auto Gallery</string>
+    <string name="select_photos">Select Photos</string>
+    <string name="slide_duration">Slide Duration</string>
+    <string name="order_type">Order Type</string>
+    <string name="transition_effect">Transition Effect</string>
+    <string name="blurred_background">Blurred background for aspect ratio fill</string>
+    <string name="only_when_charging">Only when charging</string>
+    <string name="always_enabled">Always enabled</string>
+    <string name="test_slideshow">Test Slideshow</string>
+    <string name="photo_selection">Photo Selection</string>
+    <string name="slideshow_settings">Slideshow Settings</string>
+</resources>
