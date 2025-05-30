@@ -1,4 +1,4 @@
-// SlideshowActivity.kt - Fixed null safety issues
+// SlideshowActivity.kt - Fixed sliding transitions
 package com.meerkat.autogallery
 
 import android.animation.AnimatorSet
@@ -400,7 +400,8 @@ class SlideshowActivity : AppCompatActivity() {
             hidePauseIndicator()
             if (!isTransitioning) {
                 scheduleNextImage()
-                startSubtleZoomEffect()
+                // Restart zoom from current scale
+                startZoomOnView(currentImageView)
             }
         }
     }
@@ -715,22 +716,24 @@ class SlideshowActivity : AppCompatActivity() {
     }
 
     private fun setInitialScaleForNextImage() {
+        // Set the initial scale for the next image to match the zoom pattern
         val zoomScale = 1f + (settings.zoomAmount / 100f)
 
-        if (settings.zoomType == ZoomType.SINE_WAVE) {
-            if (currentPhotoIndex % 2 == 1) {
-                nextImageView.scaleX = zoomScale
-                nextImageView.scaleY = zoomScale
-                Log.d(TAG, "Set initial scale $zoomScale for image at index $currentPhotoIndex")
-            } else {
-                nextImageView.scaleX = 1.0f
-                nextImageView.scaleY = 1.0f
-                Log.d(TAG, "Set initial scale 1.0 for image at index $currentPhotoIndex")
+        val initialScale = when (settings.zoomType) {
+            ZoomType.SAWTOOTH -> 1f  // Always start from 1.0 for sawtooth
+            ZoomType.SINE_WAVE -> {
+                if (currentPhotoIndex % 2 == 0) {
+                    1f  // Start from 1.0 for even indices
+                } else {
+                    zoomScale  // Start from max zoom for odd indices
+                }
             }
-        } else {
-            nextImageView.scaleX = 1.0f
-            nextImageView.scaleY = 1.0f
         }
+
+        nextImageView.scaleX = initialScale
+        nextImageView.scaleY = initialScale
+
+        Log.d(TAG, "Set initial scale $initialScale for image at index $currentPhotoIndex")
     }
 
     private fun loadBlurredBackground(uri: Uri, fastTransition: Boolean = false) {
@@ -792,12 +795,46 @@ class SlideshowActivity : AppCompatActivity() {
 
         val duration = if (fastTransition) 250L else 500L
 
+        // Special case: if this is the first image (no current image), just show it directly
+        if (currentImageView.drawable == null) {
+            // First image - no transition needed
+            swapImageViews()
+            if (settings.enableBlurredBackground) {
+                swapBackgroundViews()
+            }
+
+            // Start zoom immediately on the first image
+            if (!isPaused) {
+                startZoomOnView(currentImageView)
+            }
+
+            isTransitioning = false
+
+            // Schedule next image
+            if (!fastTransition && !isPaused) {
+                scheduleNextImage()
+            }
+            return
+        }
+
         val animator = when (settings.transitionType) {
             TransitionType.FADE -> createFadeTransition(duration)
-            TransitionType.SLIDE_LEFT -> createSlideTransition(-1f, 0f, duration)
-            TransitionType.SLIDE_RIGHT -> createSlideTransition(1f, 0f, duration)
-            TransitionType.SLIDE_UP -> createSlideTransition(0f, -1f, duration)
-            TransitionType.SLIDE_DOWN -> createSlideTransition(0f, 1f, duration)
+            TransitionType.SLIDE_LEFT -> {
+                resetViewStates()  // Reset before slide transition
+                createSlideTransition(SlideDirection.LEFT, duration)
+            }
+            TransitionType.SLIDE_RIGHT -> {
+                resetViewStates()  // Reset before slide transition
+                createSlideTransition(SlideDirection.RIGHT, duration)
+            }
+            TransitionType.SLIDE_UP -> {
+                resetViewStates()  // Reset before slide transition
+                createSlideTransition(SlideDirection.UP, duration)
+            }
+            TransitionType.SLIDE_DOWN -> {
+                resetViewStates()  // Reset before slide transition
+                createSlideTransition(SlideDirection.DOWN, duration)
+            }
         }
 
         animator.addListener(object : android.animation.AnimatorListenerAdapter() {
@@ -812,6 +849,11 @@ class SlideshowActivity : AppCompatActivity() {
         })
 
         animator.start()
+    }
+
+    // Slide direction enum for cleaner code
+    private enum class SlideDirection {
+        LEFT, RIGHT, UP, DOWN
     }
 
     private fun createFadeTransition(duration: Long = 500L): AnimatorSet {
@@ -834,15 +876,18 @@ class SlideshowActivity : AppCompatActivity() {
         }
 
         animatorSet.addListener(object : android.animation.AnimatorListenerAdapter() {
+            override fun onAnimationStart(animation: android.animation.Animator) {
+                // Start zoom on the next image immediately when fade begins
+                startZoomOnView(nextImageView)
+            }
+
             override fun onAnimationEnd(animation: android.animation.Animator) {
                 if (isActivityActive) {
                     swapImageViews()
                     if (settings.enableBlurredBackground) {
                         swapBackgroundViews()
                     }
-                    if (!isPaused) {
-                        startSubtleZoomEffect()
-                    }
+                    // Zoom is already running on the now-current view
                 }
             }
         })
@@ -850,69 +895,62 @@ class SlideshowActivity : AppCompatActivity() {
         return animatorSet
     }
 
-    private fun createSlideTransition(deltaX: Float, deltaY: Float, duration: Long = 800L): AnimatorSet {
-        val screenWidthFloat = screenWidth.toFloat()
-        val screenHeightFloat = screenHeight.toFloat()
+    private fun createSlideTransition(direction: SlideDirection, duration: Long = 500L): AnimatorSet {
+        Log.d(TAG, "Creating slide transition: $direction, duration: $duration")
 
-        val imageSlideOut: ObjectAnimator
-        val imageSlideIn: ObjectAnimator
-        val backgroundSlideOut: ObjectAnimator
-        val backgroundSlideIn: ObjectAnimator
-
-        if (deltaX != 0f) {
-            imageSlideOut = ObjectAnimator.ofFloat(
-                currentImageView, "translationX", 0f, deltaX * screenWidthFloat
-            )
-            imageSlideIn = ObjectAnimator.ofFloat(
-                nextImageView, "translationX", -deltaX * screenWidthFloat, 0f
-            )
-            backgroundSlideOut = ObjectAnimator.ofFloat(
-                currentBackgroundImageView, "translationX", 0f, deltaX * screenWidthFloat
-            )
-            backgroundSlideIn = ObjectAnimator.ofFloat(
-                nextBackgroundImageView, "translationX", -deltaX * screenWidthFloat, 0f
-            )
-        } else {
-            imageSlideOut = ObjectAnimator.ofFloat(
-                currentImageView, "translationY", 0f, deltaY * screenHeightFloat
-            )
-            imageSlideIn = ObjectAnimator.ofFloat(
-                nextImageView, "translationY", -deltaY * screenHeightFloat, 0f
-            )
-            backgroundSlideOut = ObjectAnimator.ofFloat(
-                currentBackgroundImageView, "translationY", 0f, deltaY * screenHeightFloat
-            )
-            backgroundSlideIn = ObjectAnimator.ofFloat(
-                nextBackgroundImageView, "translationY", -deltaY * screenHeightFloat, 0f
-            )
+        // Calculate slide distances
+        val slideDistance = when (direction) {
+            SlideDirection.LEFT, SlideDirection.RIGHT -> screenWidth.toFloat()
+            SlideDirection.UP, SlideDirection.DOWN -> screenHeight.toFloat()
         }
 
-        nextImageView.alpha = 1f
-        nextBackgroundImageView.alpha = 1f
+        // Determine staging and target positions
+        val (nextStartPos, currentEndPos) = when (direction) {
+            SlideDirection.LEFT -> Pair(slideDistance, -slideDistance)     // Next starts right, current ends left
+            SlideDirection.RIGHT -> Pair(-slideDistance, slideDistance)    // Next starts left, current ends right
+            SlideDirection.UP -> Pair(slideDistance, -slideDistance)       // Next starts bottom, current ends top
+            SlideDirection.DOWN -> Pair(-slideDistance, slideDistance)     // Next starts top, current ends bottom
+        }
 
-        imageSlideOut.duration = duration
-        imageSlideIn.duration = duration
-        backgroundSlideOut.duration = duration
-        backgroundSlideIn.duration = duration
+        // Stage the next view off-screen BEFORE making it visible
+        stageNextViewOffScreen(direction, nextStartPos)
+
+        // Now make views visible for the slide
+        nextImageView.alpha = 1f
+        currentImageView.alpha = 1f
+
+        if (settings.enableBlurredBackground) {
+            stageBackgroundViewOffScreen(direction, nextStartPos)
+            nextBackgroundImageView.alpha = 1f
+            currentBackgroundImageView.alpha = 1f
+        }
+
+        // Create animations
+        val currentOut = createViewExitAnimation(currentImageView, direction, currentEndPos, duration)
+        val nextIn = createViewEnterAnimation(nextImageView, direction, duration)
 
         val animatorSet = AnimatorSet()
 
         if (settings.enableBlurredBackground) {
-            animatorSet.playTogether(imageSlideOut, imageSlideIn, backgroundSlideOut, backgroundSlideIn)
+            val currentBgOut = createViewExitAnimation(currentBackgroundImageView, direction, currentEndPos, duration)
+            val nextBgIn = createViewEnterAnimation(nextBackgroundImageView, direction, duration)
+            animatorSet.playTogether(currentOut, nextIn, currentBgOut, nextBgIn)
         } else {
-            animatorSet.playTogether(imageSlideOut, imageSlideIn)
+            animatorSet.playTogether(currentOut, nextIn)
         }
 
+        animatorSet.interpolator = AccelerateDecelerateInterpolator()
+
         animatorSet.addListener(object : android.animation.AnimatorListenerAdapter() {
+            override fun onAnimationStart(animation: android.animation.Animator) {
+                // Start zoom on the next image immediately when slide begins
+                startZoomOnView(nextImageView)
+            }
+
             override fun onAnimationEnd(animation: android.animation.Animator) {
                 if (isActivityActive) {
-                    swapImageViews()
-                    if (settings.enableBlurredBackground) {
-                        swapBackgroundViews()
-                    }
-                    if (!isPaused) {
-                        startSubtleZoomEffect()
-                    }
+                    completeSlideTransition()
+                    // Zoom is already running on the now-current view
                 }
             }
         })
@@ -920,9 +958,127 @@ class SlideshowActivity : AppCompatActivity() {
         return animatorSet
     }
 
-    private fun startSubtleZoomEffect() {
+    private fun resetViewStates() {
+        // Reset all transformations to ensure clean state
+        listOf(currentImageView, nextImageView, currentBackgroundImageView, nextBackgroundImageView).forEach { view ->
+            view.translationX = 0f
+            view.translationY = 0f
+            view.rotation = 0f
+            view.scaleX = 1f
+            view.scaleY = 1f
+        }
+
+        // Set alpha states - keep next views hidden until properly staged
+        currentImageView.alpha = 1f
+        nextImageView.alpha = 0f  // Hide until properly staged off-screen
+        currentBackgroundImageView.alpha = if (settings.enableBlurredBackground) 1f else 0f
+        nextBackgroundImageView.alpha = 0f  // Hide until properly staged off-screen
+    }
+
+    private fun stageNextViewOffScreen(direction: SlideDirection, startPosition: Float) {
+        // First position the view off-screen
+        when (direction) {
+            SlideDirection.LEFT, SlideDirection.RIGHT -> {
+                nextImageView.translationX = startPosition
+                nextImageView.translationY = 0f
+            }
+            SlideDirection.UP, SlideDirection.DOWN -> {
+                nextImageView.translationX = 0f
+                nextImageView.translationY = startPosition
+            }
+        }
+        // Don't set alpha here - it will be set in createSlideTransition
+        Log.d(TAG, "Staged next view off-screen at position: $startPosition for direction: $direction")
+    }
+
+    private fun stageBackgroundViewOffScreen(direction: SlideDirection, startPosition: Float) {
+        // First position the background view off-screen
+        when (direction) {
+            SlideDirection.LEFT, SlideDirection.RIGHT -> {
+                nextBackgroundImageView.translationX = startPosition
+                nextBackgroundImageView.translationY = 0f
+            }
+            SlideDirection.UP, SlideDirection.DOWN -> {
+                nextBackgroundImageView.translationX = 0f
+                nextBackgroundImageView.translationY = startPosition
+            }
+        }
+        // Don't set alpha here - it will be set in createSlideTransition
+    }
+
+    private fun createViewExitAnimation(view: View, direction: SlideDirection, endPosition: Float, duration: Long): ObjectAnimator {
+        val property = when (direction) {
+            SlideDirection.LEFT, SlideDirection.RIGHT -> "translationX"
+            SlideDirection.UP, SlideDirection.DOWN -> "translationY"
+        }
+
+        return ObjectAnimator.ofFloat(view, property, 0f, endPosition).apply {
+            this.duration = duration
+        }
+    }
+
+    private fun createViewEnterAnimation(view: View, direction: SlideDirection, duration: Long): ObjectAnimator {
+        val property = when (direction) {
+            SlideDirection.LEFT, SlideDirection.RIGHT -> "translationX"
+            SlideDirection.UP, SlideDirection.DOWN -> "translationY"
+        }
+
+        return ObjectAnimator.ofFloat(view, property, view.translationX, 0f).apply {
+            this.duration = duration
+        }
+    }
+
+    private fun completeSlideTransition() {
+        Log.d(TAG, "Completing slide transition")
+
+        // Swap the views
+        swapImageViews()
+        if (settings.enableBlurredBackground) {
+            swapBackgroundViews()
+        }
+
+        // Reset all views to clean state
+        currentImageView.apply {
+            translationX = 0f
+            translationY = 0f
+            scaleX = 1f
+            scaleY = 1f
+            alpha = 1f
+        }
+
+        nextImageView.apply {
+            translationX = 0f
+            translationY = 0f
+            scaleX = 1f
+            scaleY = 1f
+            alpha = 0f  // Hide for next transition
+        }
+
+        if (settings.enableBlurredBackground) {
+            currentBackgroundImageView.apply {
+                translationX = 0f
+                translationY = 0f
+                scaleX = 1f
+                scaleY = 1f
+                alpha = 1f
+            }
+
+            nextBackgroundImageView.apply {
+                translationX = 0f
+                translationY = 0f
+                scaleX = 1f
+                scaleY = 1f
+                alpha = 0f  // Hide for next transition
+            }
+        }
+
+        Log.d(TAG, "Slide transition completed")
+    }
+
+    private fun startZoomOnView(imageView: ImageView) {
         if (!isActivityActive || isPaused) return
 
+        // Cancel any existing zoom animation on the current view
         currentZoomAnimator?.cancel()
 
         val zoomScale = 1f + (settings.zoomAmount / 100f)
@@ -938,10 +1094,10 @@ class SlideshowActivity : AppCompatActivity() {
             }
         }
 
-        Log.d(TAG, "Starting zoom effect: ${startScale} -> ${endScale} for photo index $currentPhotoIndex (zoom amount: ${settings.zoomAmount}%)")
+        Log.d(TAG, "Starting zoom effect on view: ${startScale} -> ${endScale} for photo index $currentPhotoIndex (zoom amount: ${settings.zoomAmount}%)")
 
-        val scaleXAnimator = ObjectAnimator.ofFloat(currentImageView, "scaleX", startScale, endScale)
-        val scaleYAnimator = ObjectAnimator.ofFloat(currentImageView, "scaleY", startScale, endScale)
+        val scaleXAnimator = ObjectAnimator.ofFloat(imageView, "scaleX", imageView.scaleX, endScale)
+        val scaleYAnimator = ObjectAnimator.ofFloat(imageView, "scaleY", imageView.scaleY, endScale)
 
         val duration = settings.slideDuration.toLong()
         scaleXAnimator.duration = duration
@@ -953,9 +1109,18 @@ class SlideshowActivity : AppCompatActivity() {
 
         val animatorSet = AnimatorSet()
         animatorSet.playTogether(scaleXAnimator, scaleYAnimator)
-        animatorSet.start()
 
-        currentZoomAnimator = scaleXAnimator
+        // Update animator reference when this view becomes the current view
+        if (imageView == currentImageView) {
+            currentZoomAnimator = scaleXAnimator
+        }
+
+        animatorSet.start()
+    }
+
+    private fun startSubtleZoomEffect() {
+        // This is now just a wrapper that calls the new function
+        startZoomOnView(currentImageView)
     }
 
     private fun swapImageViews() {
@@ -963,11 +1128,25 @@ class SlideshowActivity : AppCompatActivity() {
         currentImageView = nextImageView
         nextImageView = temp
 
+        // The current view should be visible, next should be hidden
+        currentImageView.alpha = 1f
         nextImageView.alpha = 0f
+
+        // Reset transformations for the new next view
         nextImageView.scaleX = 1f
         nextImageView.scaleY = 1f
         nextImageView.translationX = 0f
         nextImageView.translationY = 0f
+
+        // Update zoom animator reference to the new current view
+        // The zoom should already be running on this view from the transition start
+        updateZoomAnimatorReference()
+    }
+
+    private fun updateZoomAnimatorReference() {
+        // Find any running scale animation on the current view and update our reference
+        currentImageView.animate().cancel() // This doesn't affect ObjectAnimator, just ViewPropertyAnimator
+        // The zoom animation should already be running from startZoomOnView called during transition
     }
 
     private fun swapBackgroundViews() {
@@ -975,7 +1154,11 @@ class SlideshowActivity : AppCompatActivity() {
         currentBackgroundImageView = nextBackgroundImageView
         nextBackgroundImageView = temp
 
+        // The current background should be visible (if enabled), next should be hidden
+        currentBackgroundImageView.alpha = if (settings.enableBlurredBackground) 1f else 0f
         nextBackgroundImageView.alpha = 0f
+
+        // Reset transformations for the new next background view
         nextBackgroundImageView.scaleX = 1f
         nextBackgroundImageView.scaleY = 1f
         nextBackgroundImageView.translationX = 0f
