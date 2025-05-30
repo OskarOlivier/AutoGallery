@@ -13,4 +13,10 @@
     <string name="test_slideshow">Test Slideshow</string>
     <string name="photo_selection">Photo Selection</string>
     <string name="slideshow_settings">Slideshow Settings</string>
+    <string name="slideshow_content_description">Slideshow view. Tap to pause, swipe to navigate, double-tap to exit.</string>
+    <string name="gesture_pause">Pause slideshow</string>
+    <string name="gesture_resume">Resume slideshow</string>
+    <string name="gesture_next">Next image</string>
+    <string name="gesture_previous">Previous image</string>
+    <string name="gesture_exit">Exit slideshow</string>
 </resources>

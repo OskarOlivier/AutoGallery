@@ -1,4 +1,4 @@
-// SlideshowActivity.kt
+// SlideshowActivity.kt - Fixed null safety issues
 package com.meerkat.autogallery
 
 import android.animation.AnimatorSet
@@ -17,20 +17,29 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.provider.MediaStore
 import android.util.Log
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.view.animation.AccelerateDecelerateInterpolator
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.GestureDetectorCompat
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.bitmap.CenterCrop
 import com.bumptech.glide.request.target.SimpleTarget
 import com.bumptech.glide.request.transition.Transition
-import android.widget.ImageView
 import jp.wasabeef.glide.transformations.BlurTransformation
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.random.Random
 
@@ -40,13 +49,15 @@ class SlideshowActivity : AppCompatActivity() {
     private lateinit var nextImageView: ImageView
     private lateinit var currentBackgroundImageView: ImageView
     private lateinit var nextBackgroundImageView: ImageView
+    private lateinit var pauseIndicator: LinearLayout
+    private lateinit var gestureHints: LinearLayout
 
     private lateinit var preferencesManager: PreferencesManager
     private lateinit var settings: GallerySettings
     private val handler = Handler(Looper.getMainLooper())
     private var currentPhotoIndex = 0
-    private var currentPhotoList = mutableListOf<PhotoInfo>() // Filtered by orientation
-    private var allPhotoList = mutableListOf<PhotoInfo>() // All photos
+    private var currentPhotoList = mutableListOf<PhotoInfo>()
+    private var allPhotoList = mutableListOf<PhotoInfo>()
     private var currentDeviceOrientation: ImageOrientation = ImageOrientation.LANDSCAPE
     private var slideshowRunnable: Runnable? = null
     private var currentZoomAnimator: ObjectAnimator? = null
@@ -56,12 +67,22 @@ class SlideshowActivity : AppCompatActivity() {
     private var shouldIgnoreScreenOn = true
     private var isReceiverRegistered = false
 
+    // Gesture handling variables
+    private lateinit var gestureDetector: GestureDetectorCompat
+    private var isPaused = false
+    private var isTransitioning = false
+    private var lastGestureTime = 0L
+
     // Screen dimension variables for custom image fitting
     private var screenWidth = 0
     private var screenHeight = 0
 
     companion object {
         private const val TAG = "SlideshowActivity"
+        private const val MIN_SWIPE_DISTANCE = 100 // pixels
+        private const val MIN_SWIPE_VELOCITY = 800 // pixels per second
+        private const val GESTURE_DEBOUNCE_TIME = 200L // ms
+        private const val EDGE_THRESHOLD = 50 // pixels
     }
 
     private val screenStateReceiver = object : BroadcastReceiver() {
@@ -72,7 +93,6 @@ class SlideshowActivity : AppCompatActivity() {
                     val timeSinceStart = System.currentTimeMillis() - startTime
                     Log.d(TAG, "Screen turned on after ${timeSinceStart}ms, shouldIgnoreScreenOn: $shouldIgnoreScreenOn")
 
-                    // Ignore screen on events for the first 5 seconds after activity start
                     if (shouldIgnoreScreenOn && timeSinceStart < 5000) {
                         Log.d(TAG, "Ignoring screen on event - activity just started")
                         handler.postDelayed({
@@ -95,16 +115,12 @@ class SlideshowActivity : AppCompatActivity() {
         Log.d(TAG, "onCreate called at $startTime")
 
         try {
-            // Get screen dimensions first
             getScreenDimensions()
-
             setContentView(R.layout.activity_slideshow)
-
-            // Setup modern fullscreen AFTER setContentView
             setupFullscreen()
             setupUIVisibilityListener()
-
             initViews()
+            setupGestureDetection()
             loadSettings()
 
             if (currentPhotoList.isEmpty()) {
@@ -114,17 +130,15 @@ class SlideshowActivity : AppCompatActivity() {
             }
 
             isActivityActive = true
-
-            // Register receiver immediately but with logic to ignore initial screen on
             registerScreenStateReceiver()
+            showGestureHintsIfNeeded()
 
-            // Start slideshow after a short delay
             handler.postDelayed({
                 if (!isFinishing && isActivityActive) {
                     Log.d(TAG, "Starting slideshow after delay")
                     startSlideshow()
                 }
-            }, 500) // Shorter delay
+            }, 500)
 
         } catch (e: Exception) {
             Log.e(TAG, "Error in onCreate", e)
@@ -141,7 +155,6 @@ class SlideshowActivity : AppCompatActivity() {
     }
 
     private fun setupFullscreen() {
-        // Set window flags first
         window.setFlags(
             WindowManager.LayoutParams.FLAG_FULLSCREEN or
                     WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
@@ -153,13 +166,11 @@ class SlideshowActivity : AppCompatActivity() {
                     WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
         )
 
-        // Handle display cutouts (notches) for Android 9+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             window.attributes.layoutInDisplayCutoutMode =
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
 
-        // Modern fullscreen approach for Android 11+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.insetsController?.let { controller ->
                 controller.hide(WindowInsets.Type.systemBars())
@@ -217,20 +228,282 @@ class SlideshowActivity : AppCompatActivity() {
         nextImageView = findViewById(R.id.nextImageView)
         currentBackgroundImageView = findViewById(R.id.currentBackgroundImageView)
         nextBackgroundImageView = findViewById(R.id.nextBackgroundImageView)
+        pauseIndicator = findViewById(R.id.pauseIndicator)
+        gestureHints = findViewById(R.id.gestureHints)
 
-        // Initially hide the next image views
+        // Initially hide the next image views and overlays
         nextImageView.alpha = 0f
         nextBackgroundImageView.alpha = 0f
+        pauseIndicator.visibility = View.GONE
+        gestureHints.visibility = View.GONE
+    }
+
+    private fun setupGestureDetection() {
+        val gestureListener = object : GestureDetector.SimpleOnGestureListener() {
+
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                if (!shouldProcessGesture()) return false
+                Log.d(TAG, "Single tap detected")
+                togglePauseResume()
+                provideFeedback(if (isPaused) "pause" else "resume")
+                return true
+            }
+
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                if (!shouldProcessGesture()) return false
+                Log.d(TAG, "Double tap detected - exiting slideshow")
+                showExitFeedback()
+                provideFeedback("exit")
+                finish()
+                return true
+            }
+
+            override fun onFling(
+                e1: MotionEvent?,
+                e2: MotionEvent,
+                velocityX: Float,
+                velocityY: Float
+            ): Boolean {
+                if (!shouldProcessGesture() || !isValidGesture(e1, e2)) return false
+
+                // Safe access to e1 properties since e1 can be null
+                e1?.let { startEvent ->
+                    val deltaX = e2.x - startEvent.x
+                    val deltaY = e2.y - startEvent.y
+
+                    // Check if it's a horizontal swipe
+                    if (abs(deltaX) > abs(deltaY) &&
+                        abs(deltaX) > MIN_SWIPE_DISTANCE &&
+                        abs(velocityX) > MIN_SWIPE_VELOCITY) {
+
+                        if (deltaX > 0) {
+                            // Swipe right - go to previous image
+                            Log.d(TAG, "Swipe right - previous image")
+                            goToPreviousImage()
+                            provideFeedback("previous")
+                        } else {
+                            // Swipe left - go to next image
+                            Log.d(TAG, "Swipe left - next image")
+                            goToNextImage()
+                            provideFeedback("next")
+                        }
+                        return true
+                    }
+                } ?: return false
+
+                return false
+            }
+        }
+
+        gestureDetector = GestureDetectorCompat(this, gestureListener)
+
+        // Set touch listener on the main container
+        findViewById<View>(R.id.slideshowContainer).setOnTouchListener { _, event ->
+            gestureDetector.onTouchEvent(event)
+        }
+    }
+
+    private fun shouldProcessGesture(): Boolean {
+        val currentTime = System.currentTimeMillis()
+        return if (currentTime - lastGestureTime > GESTURE_DEBOUNCE_TIME) {
+            lastGestureTime = currentTime
+            true
+        } else {
+            false
+        }
+    }
+
+    private fun isValidGesture(e1: MotionEvent?, e2: MotionEvent): Boolean {
+        if (e1 == null) return false
+
+        // Ignore touches near screen edges (accidental touches)
+        if (e1.x < EDGE_THRESHOLD || e1.x > screenWidth - EDGE_THRESHOLD) return false
+
+        // Ignore very short swipes (likely accidental)
+        val deltaTime = e2.eventTime - e1.eventTime
+        if (deltaTime < 100) return false
+
+        return true
+    }
+
+    private fun provideFeedback(action: String) {
+        // Subtle haptic feedback
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                vibrator?.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not provide haptic feedback", e)
+        }
+
+        // Hide gesture hints if they're showing
+        if (gestureHints.visibility == View.VISIBLE) {
+            hideGestureHints()
+        }
+    }
+
+    private fun showGestureHintsIfNeeded() {
+        val prefs = getSharedPreferences("gesture_hints", Context.MODE_PRIVATE)
+        val hintCount = prefs.getInt("hint_count", 0)
+
+        if (hintCount < 3) {
+            gestureHints.apply {
+                visibility = View.VISIBLE
+                alpha = 0f
+                animate()
+                    .alpha(1f)
+                    .setDuration(500)
+                    .setStartDelay(2000) // Show after 2 seconds
+                    .withEndAction {
+                        animate()
+                            .alpha(0f)
+                            .setDuration(500)
+                            .setStartDelay(4000) // Hide after 4 seconds
+                            .withEndAction { visibility = View.GONE }
+                            .start()
+                    }
+                    .start()
+            }
+
+            prefs.edit().putInt("hint_count", hintCount + 1).apply()
+        }
+    }
+
+    private fun hideGestureHints() {
+        if (gestureHints.visibility == View.VISIBLE) {
+            gestureHints.animate()
+                .alpha(0f)
+                .setDuration(300)
+                .withEndAction { gestureHints.visibility = View.GONE }
+                .start()
+        }
+    }
+
+    private fun togglePauseResume() {
+        if (isTransitioning) {
+            Log.d(TAG, "Ignoring pause/resume during transition")
+            return
+        }
+
+        isPaused = !isPaused
+        Log.d(TAG, "Slideshow ${if (isPaused) "paused" else "resumed"}")
+
+        if (isPaused) {
+            // Cancel scheduled next image
+            slideshowRunnable?.let { handler.removeCallbacks(it) }
+            // Cancel zoom animation
+            currentZoomAnimator?.cancel()
+            showPauseIndicator()
+        } else {
+            // Resume slideshow
+            hidePauseIndicator()
+            if (!isTransitioning) {
+                scheduleNextImage()
+                startSubtleZoomEffect()
+            }
+        }
+    }
+
+    private fun goToPreviousImage() {
+        if (isTransitioning) return
+
+        // Pause automatic slideshow temporarily
+        val wasRunning = !isPaused
+        if (wasRunning) {
+            slideshowRunnable?.let { handler.removeCallbacks(it) }
+        }
+
+        // Move to previous index
+        currentPhotoIndex = if (currentPhotoIndex == 0) {
+            currentPhotoList.size - 1
+        } else {
+            currentPhotoIndex - 1
+        }
+
+        // Show the image immediately with fast transition
+        showNextImage(fastTransition = true)
+
+        // Resume if it was running
+        if (wasRunning && !isPaused) {
+            // Will be scheduled after transition completes
+        }
+    }
+
+    private fun goToNextImage() {
+        if (isTransitioning) return
+
+        // Pause automatic slideshow temporarily
+        val wasRunning = !isPaused
+        if (wasRunning) {
+            slideshowRunnable?.let { handler.removeCallbacks(it) }
+        }
+
+        // Move to next index
+        moveToNextPhoto()
+
+        // Show the image immediately with fast transition
+        showNextImage(fastTransition = true)
+
+        // Resume if it was running
+        if (wasRunning && !isPaused) {
+            // Will be scheduled after transition completes
+        }
+    }
+
+    private fun showPauseIndicator() {
+        val pauseIcon = pauseIndicator.findViewById<ImageView>(R.id.pauseIcon)
+        pauseIcon.setImageResource(R.drawable.ic_pause)
+
+        pauseIndicator.visibility = View.VISIBLE
+        pauseIndicator.alpha = 0f
+        pauseIndicator.animate()
+            .alpha(0.9f)
+            .setDuration(200)
+            .start()
+    }
+
+    private fun hidePauseIndicator() {
+        pauseIndicator.animate()
+            .alpha(0f)
+            .setDuration(200)
+            .withEndAction {
+                pauseIndicator.visibility = View.GONE
+            }
+            .start()
+    }
+
+    private fun showExitFeedback() {
+        // Brief visual feedback before exiting
+        val overlay = View(this).apply {
+            setBackgroundColor(0x40FFFFFF)
+        }
+
+        val container = findViewById<View>(R.id.slideshowContainer) as android.widget.FrameLayout
+        container.addView(overlay, android.widget.FrameLayout.LayoutParams(
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        overlay.alpha = 0f
+        overlay.animate()
+            .alpha(1f)
+            .setDuration(150)
+            .withEndAction {
+                overlay.animate()
+                    .alpha(0f)
+                    .setDuration(150)
+                    .start()
+            }
+            .start()
     }
 
     private fun loadSettings() {
         preferencesManager = PreferencesManager(this)
         settings = preferencesManager.loadSettings()
 
-        // Load all photos
         allPhotoList = settings.photoInfoList.toMutableList()
 
-        // If no photo info available (backward compatibility), create basic info
         if (allPhotoList.isEmpty() && settings.selectedPhotos.isNotEmpty()) {
             allPhotoList = settings.selectedPhotos.map { uri ->
                 PhotoInfo(
@@ -242,8 +515,6 @@ class SlideshowActivity : AppCompatActivity() {
         }
 
         Log.d(TAG, "Loaded ${allPhotoList.size} total photos")
-
-        // Filter photos by orientation
         filterPhotosByOrientation()
 
         if (currentPhotoList.isEmpty()) {
@@ -251,9 +522,7 @@ class SlideshowActivity : AppCompatActivity() {
             return
         }
 
-        // Sort photos based on order type
         sortPhotoList()
-
         Log.d(TAG, "Using ${currentPhotoList.size} photos for current orientation ($currentDeviceOrientation)")
     }
 
@@ -267,19 +536,10 @@ class SlideshowActivity : AppCompatActivity() {
                 )
             }.toMutableList()
         } else {
-            // If orientation filtering is disabled, show all photos
             allPhotoList.toMutableList()
         }
 
         Log.d(TAG, "Filtered from ${allPhotoList.size} to ${currentPhotoList.size} photos for orientation $currentDeviceOrientation")
-
-        // Log breakdown for debugging
-        if (settings.enableOrientationFiltering) {
-            val landscapeCount = allPhotoList.count { it.orientation == ImageOrientation.LANDSCAPE }
-            val portraitCount = allPhotoList.count { it.orientation == ImageOrientation.PORTRAIT }
-            val squareCount = allPhotoList.count { it.orientation == ImageOrientation.SQUARE }
-            Log.d(TAG, "Available photos: $landscapeCount landscape, $portraitCount portrait, $squareCount square")
-        }
     }
 
     private fun sortPhotoList() {
@@ -327,13 +587,9 @@ class SlideshowActivity : AppCompatActivity() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-
         Log.d(TAG, "Configuration changed: orientation = ${newConfig.orientation}")
 
-        // Update screen dimensions and device orientation
         getScreenDimensions()
-
-        // Re-filter photos for new orientation
         val oldPhotoCount = currentPhotoList.size
         filterPhotosByOrientation()
 
@@ -345,18 +601,11 @@ class SlideshowActivity : AppCompatActivity() {
             return
         }
 
-        // Re-sort the filtered list
         sortPhotoList()
-
-        // Reset to first photo in the new orientation's list
         currentPhotoIndex = 0
 
-        // If slideshow is running, restart with new photo list
         if (hasStartedSlideshow) {
-            // Cancel current slideshow timing
             slideshowRunnable?.let { handler.removeCallbacks(it) }
-
-            // Start new photo immediately
             showNextImage()
         }
     }
@@ -384,15 +633,15 @@ class SlideshowActivity : AppCompatActivity() {
         }
     }
 
-    private fun showNextImage() {
+    private fun showNextImage(fastTransition: Boolean = false) {
         if (currentPhotoList.isEmpty() || !isActivityActive) return
 
+        isTransitioning = true
         val currentPhotoInfo = currentPhotoList[currentPhotoIndex]
         val currentUri = Uri.parse(currentPhotoInfo.uri)
 
         Log.d(TAG, "Loading image ${currentPhotoIndex + 1}/${currentPhotoList.size}: ${currentPhotoInfo.orientation} - $currentUri")
 
-        // Load image with custom fitting logic
         Glide.with(this)
             .load(currentUri)
             .error(R.drawable.ic_photo_library)
@@ -405,18 +654,14 @@ class SlideshowActivity : AppCompatActivity() {
 
                     Log.d(TAG, "Image loaded successfully - ${currentPhotoInfo.orientation}")
 
-                    // Apply custom fitting logic
                     val fittedDrawable = applyCustomFitting(resource)
                     nextImageView.setImageDrawable(fittedDrawable)
-
-                    // Set correct initial scale for SINE_WAVE pattern BEFORE transition
                     setInitialScaleForNextImage()
 
-                    // Load blurred background if enabled
                     if (settings.enableBlurredBackground) {
-                        loadBlurredBackground(currentUri)
+                        loadBlurredBackground(currentUri, fastTransition)
                     } else {
-                        performTransition()
+                        performTransition(fastTransition)
                     }
                 }
 
@@ -426,9 +671,9 @@ class SlideshowActivity : AppCompatActivity() {
                     setInitialScaleForNextImage()
 
                     if (settings.enableBlurredBackground) {
-                        loadBlurredBackground(currentUri)
+                        loadBlurredBackground(currentUri, fastTransition)
                     } else {
-                        performTransition()
+                        performTransition(fastTransition)
                     }
                 }
             })
@@ -443,20 +688,15 @@ class SlideshowActivity : AppCompatActivity() {
             return drawable
         }
 
-        // Calculate aspect ratios
         val imageAspectRatio = imageWidth.toFloat() / imageHeight.toFloat()
         val screenAspectRatio = screenWidth.toFloat() / screenHeight.toFloat()
 
-        // Calculate scale factor to ensure image touches at least 2 edges
         val scaleFactor = if (imageAspectRatio > screenAspectRatio) {
-            // Image is wider than screen - scale to height
             screenHeight.toFloat() / imageHeight.toFloat()
         } else {
-            // Image is taller than screen - scale to width
             screenWidth.toFloat() / imageWidth.toFloat()
         }
 
-        // Only scale up if the image is smaller than the screen
         val finalScale = max(scaleFactor, 1.0f)
 
         if (finalScale == 1.0f) {
@@ -466,7 +706,6 @@ class SlideshowActivity : AppCompatActivity() {
 
         Log.d(TAG, "Scaling image ${imageWidth}x${imageHeight} by factor ${finalScale}")
 
-        // Create scaled bitmap
         val bitmap = drawableToBitmap(drawable)
         val scaledWidth = (imageWidth * finalScale).toInt()
         val scaledHeight = (imageHeight * finalScale).toInt()
@@ -476,36 +715,30 @@ class SlideshowActivity : AppCompatActivity() {
     }
 
     private fun setInitialScaleForNextImage() {
-        // Calculate zoom scale from zoom amount setting (1-5 becomes 1.01-1.05)
         val zoomScale = 1f + (settings.zoomAmount / 100f)
 
-        // For SINE_WAVE pattern, set the correct starting scale for the next image
         if (settings.zoomType == ZoomType.SINE_WAVE) {
             if (currentPhotoIndex % 2 == 1) {
-                // Current image being loaded is odd index, should start zoomed
                 nextImageView.scaleX = zoomScale
                 nextImageView.scaleY = zoomScale
                 Log.d(TAG, "Set initial scale $zoomScale for image at index $currentPhotoIndex")
             } else {
-                // Current image being loaded is even index, should start normal
                 nextImageView.scaleX = 1.0f
                 nextImageView.scaleY = 1.0f
                 Log.d(TAG, "Set initial scale 1.0 for image at index $currentPhotoIndex")
             }
         } else {
-            // For SAWTOOTH, always start at normal scale
             nextImageView.scaleX = 1.0f
             nextImageView.scaleY = 1.0f
         }
     }
 
-    private fun loadBlurredBackground(uri: Uri) {
-        // Use Glide with high-quality BlurTransformation
+    private fun loadBlurredBackground(uri: Uri, fastTransition: Boolean = false) {
         Glide.with(this)
             .load(uri)
             .transform(
                 CenterCrop(),
-                BlurTransformation(25, 3) // radius: 25, sampling: 3 for high quality
+                BlurTransformation(25, 3)
             )
             .error(R.drawable.ic_photo_library)
             .into(object : SimpleTarget<Drawable>() {
@@ -515,21 +748,16 @@ class SlideshowActivity : AppCompatActivity() {
                 ) {
                     if (!isActivityActive) return
 
-                    // Apply additional darkening overlay for better contrast
                     val bitmap = drawableToBitmap(resource)
                     val darkenedBitmap = applyDarkenOverlay(bitmap)
                     nextBackgroundImageView.setImageBitmap(darkenedBitmap)
-
-                    // Now perform the transition with both image and background ready
-                    performTransition()
+                    performTransition(fastTransition)
                 }
 
                 override fun onLoadFailed(errorDrawable: Drawable?) {
                     Log.w(TAG, "Failed to load blurred background, using solid background")
-                    // Set a solid dark background as fallback
                     nextBackgroundImageView.setBackgroundColor(0xFF000000.toInt())
-                    // Continue with transition
-                    performTransition()
+                    performTransition(fastTransition)
                 }
             })
     }
@@ -555,41 +783,47 @@ class SlideshowActivity : AppCompatActivity() {
     private fun applyDarkenOverlay(bitmap: Bitmap): Bitmap {
         val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
         val canvas = Canvas(result)
-
-        // Apply color overlay for better visual effect
-        canvas.drawColor(0x40000000) // Semi-transparent black overlay
-
+        canvas.drawColor(0x40000000)
         return result
     }
 
-    private fun performTransition() {
+    private fun performTransition(fastTransition: Boolean = false) {
         if (!isActivityActive) return
 
+        val duration = if (fastTransition) 250L else 500L
+
         val animator = when (settings.transitionType) {
-            TransitionType.FADE -> createFadeTransition()
-            TransitionType.SLIDE_LEFT -> createSlideTransition(-1f, 0f)
-            TransitionType.SLIDE_RIGHT -> createSlideTransition(1f, 0f)
-            TransitionType.SLIDE_UP -> createSlideTransition(0f, -1f)
-            TransitionType.SLIDE_DOWN -> createSlideTransition(0f, 1f)
+            TransitionType.FADE -> createFadeTransition(duration)
+            TransitionType.SLIDE_LEFT -> createSlideTransition(-1f, 0f, duration)
+            TransitionType.SLIDE_RIGHT -> createSlideTransition(1f, 0f, duration)
+            TransitionType.SLIDE_UP -> createSlideTransition(0f, -1f, duration)
+            TransitionType.SLIDE_DOWN -> createSlideTransition(0f, 1f, duration)
         }
 
-        animator.start()
+        animator.addListener(object : android.animation.AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: android.animation.Animator) {
+                super.onAnimationEnd(animation)
+                isTransitioning = false
+                // Schedule next image only if not paused and not a manual fast transition
+                if (!fastTransition && !isPaused) {
+                    scheduleNextImage()
+                }
+            }
+        })
 
-        // Schedule next image
-        scheduleNextImage()
+        animator.start()
     }
 
-    private fun createFadeTransition(): AnimatorSet {
+    private fun createFadeTransition(duration: Long = 500L): AnimatorSet {
         val imageFadeOut = ObjectAnimator.ofFloat(currentImageView, "alpha", 1f, 0f)
         val imageFadeIn = ObjectAnimator.ofFloat(nextImageView, "alpha", 0f, 1f)
-
         val backgroundFadeOut = ObjectAnimator.ofFloat(currentBackgroundImageView, "alpha", 1f, 0f)
         val backgroundFadeIn = ObjectAnimator.ofFloat(nextBackgroundImageView, "alpha", 0f, 1f)
 
-        imageFadeOut.duration = 500
-        imageFadeIn.duration = 500
-        backgroundFadeOut.duration = 500
-        backgroundFadeIn.duration = 500
+        imageFadeOut.duration = duration
+        imageFadeIn.duration = duration
+        backgroundFadeOut.duration = duration
+        backgroundFadeIn.duration = duration
 
         val animatorSet = AnimatorSet()
 
@@ -606,7 +840,9 @@ class SlideshowActivity : AppCompatActivity() {
                     if (settings.enableBlurredBackground) {
                         swapBackgroundViews()
                     }
-                    startSubtleZoomEffect()
+                    if (!isPaused) {
+                        startSubtleZoomEffect()
+                    }
                 }
             }
         })
@@ -614,7 +850,7 @@ class SlideshowActivity : AppCompatActivity() {
         return animatorSet
     }
 
-    private fun createSlideTransition(deltaX: Float, deltaY: Float): AnimatorSet {
+    private fun createSlideTransition(deltaX: Float, deltaY: Float, duration: Long = 800L): AnimatorSet {
         val screenWidthFloat = screenWidth.toFloat()
         val screenHeightFloat = screenHeight.toFloat()
 
@@ -624,7 +860,6 @@ class SlideshowActivity : AppCompatActivity() {
         val backgroundSlideIn: ObjectAnimator
 
         if (deltaX != 0f) {
-            // Horizontal slide
             imageSlideOut = ObjectAnimator.ofFloat(
                 currentImageView, "translationX", 0f, deltaX * screenWidthFloat
             )
@@ -638,7 +873,6 @@ class SlideshowActivity : AppCompatActivity() {
                 nextBackgroundImageView, "translationX", -deltaX * screenWidthFloat, 0f
             )
         } else {
-            // Vertical slide
             imageSlideOut = ObjectAnimator.ofFloat(
                 currentImageView, "translationY", 0f, deltaY * screenHeightFloat
             )
@@ -656,10 +890,10 @@ class SlideshowActivity : AppCompatActivity() {
         nextImageView.alpha = 1f
         nextBackgroundImageView.alpha = 1f
 
-        imageSlideOut.duration = 800
-        imageSlideIn.duration = 800
-        backgroundSlideOut.duration = 800
-        backgroundSlideIn.duration = 800
+        imageSlideOut.duration = duration
+        imageSlideIn.duration = duration
+        backgroundSlideOut.duration = duration
+        backgroundSlideIn.duration = duration
 
         val animatorSet = AnimatorSet()
 
@@ -676,7 +910,9 @@ class SlideshowActivity : AppCompatActivity() {
                     if (settings.enableBlurredBackground) {
                         swapBackgroundViews()
                     }
-                    startSubtleZoomEffect()
+                    if (!isPaused) {
+                        startSubtleZoomEffect()
+                    }
                 }
             }
         })
@@ -685,27 +921,18 @@ class SlideshowActivity : AppCompatActivity() {
     }
 
     private fun startSubtleZoomEffect() {
-        if (!isActivityActive) return
+        if (!isActivityActive || isPaused) return
 
-        // Cancel any existing zoom animation
         currentZoomAnimator?.cancel()
 
-        // Calculate zoom scale from zoom amount setting (1-5 becomes 1.01-1.05)
         val zoomScale = 1f + (settings.zoomAmount / 100f)
 
-        // Determine zoom direction based on zoom type and current photo index
         val (startScale, endScale) = when (settings.zoomType) {
-            ZoomType.SAWTOOTH -> {
-                // Always zoom in from 1.0 to zoomScale
-                Pair(1f, zoomScale)
-            }
+            ZoomType.SAWTOOTH -> Pair(1f, zoomScale)
             ZoomType.SINE_WAVE -> {
-                // Alternate zoom direction based on photo index
                 if (currentPhotoIndex % 2 == 0) {
-                    // Even index: zoom in
                     Pair(1f, zoomScale)
                 } else {
-                    // Odd index: zoom out (start from zoomed and go to normal)
                     Pair(zoomScale, 1f)
                 }
             }
@@ -713,26 +940,21 @@ class SlideshowActivity : AppCompatActivity() {
 
         Log.d(TAG, "Starting zoom effect: ${startScale} -> ${endScale} for photo index $currentPhotoIndex (zoom amount: ${settings.zoomAmount}%)")
 
-        // Create zoom animation from current scale to target scale
         val scaleXAnimator = ObjectAnimator.ofFloat(currentImageView, "scaleX", startScale, endScale)
         val scaleYAnimator = ObjectAnimator.ofFloat(currentImageView, "scaleY", startScale, endScale)
 
-        // Set duration to match slide duration
         val duration = settings.slideDuration.toLong()
         scaleXAnimator.duration = duration
         scaleYAnimator.duration = duration
 
-        // Use AccelerateDecelerateInterpolator for ease in/out effect
         val interpolator = AccelerateDecelerateInterpolator()
         scaleXAnimator.interpolator = interpolator
         scaleYAnimator.interpolator = interpolator
 
-        // Create animator set to play both scale animations together
         val animatorSet = AnimatorSet()
         animatorSet.playTogether(scaleXAnimator, scaleYAnimator)
         animatorSet.start()
 
-        // Store reference to the animator set for potential cancellation
         currentZoomAnimator = scaleXAnimator
     }
 
@@ -741,7 +963,6 @@ class SlideshowActivity : AppCompatActivity() {
         currentImageView = nextImageView
         nextImageView = temp
 
-        // Reset the next view for the next cycle
         nextImageView.alpha = 0f
         nextImageView.scaleX = 1f
         nextImageView.scaleY = 1f
@@ -754,7 +975,6 @@ class SlideshowActivity : AppCompatActivity() {
         currentBackgroundImageView = nextBackgroundImageView
         nextBackgroundImageView = temp
 
-        // Reset the next background view for the next cycle
         nextBackgroundImageView.alpha = 0f
         nextBackgroundImageView.scaleX = 1f
         nextBackgroundImageView.scaleY = 1f
@@ -767,12 +987,12 @@ class SlideshowActivity : AppCompatActivity() {
     }
 
     private fun scheduleNextImage() {
-        if (!isActivityActive) return
+        if (!isActivityActive || isPaused) return
 
         slideshowRunnable?.let { handler.removeCallbacks(it) }
 
         slideshowRunnable = Runnable {
-            if (isActivityActive) {
+            if (isActivityActive && !isPaused) {
                 moveToNextPhoto()
                 showNextImage()
             }
