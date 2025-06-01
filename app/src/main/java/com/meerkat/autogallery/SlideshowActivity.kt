@@ -1,4 +1,4 @@
-// Fixed SlideshowActivity.kt - Synchronizes view references after transitions
+// Fixed SlideshowActivity.kt - Implements zoom timing based on zoom type
 package com.meerkat.autogallery
 
 import android.content.BroadcastReceiver
@@ -208,10 +208,18 @@ class SlideshowActivity : AppCompatActivity() {
             targetView = nextImageView,
             backgroundView = if (photoListManager.getSettings().enableBlurredBackground) nextBackgroundImageView else null,
             onImageReady = { drawable ->
-                zoomManager.setInitialScale(nextImageView, photoListManager.getCurrentIndex(), photoListManager.getSettings())
+                val settings = photoListManager.getSettings()
+                val photoIndex = photoListManager.getCurrentIndex()
+
+                zoomManager.setInitialScale(nextImageView, photoIndex, settings)
+
+                // For SINEWAVE: Start zoom immediately when image loads (before transition)
+                // For SAWTOOTH: Zoom will start when transition begins
+                zoomManager.startZoomOnView(nextImageView, photoIndex, settings, isPreTransition = true)
+
                 transitionManager.performTransition(
-                    settings = photoListManager.getSettings(),
-                    photoIndex = photoListManager.getCurrentIndex(),
+                    settings = settings,
+                    photoIndex = photoIndex,
                     fastTransition = fastTransition
                 ) { updatedViewReferences ->
                     // CRITICAL FIX: Update our view references to match the transition manager
@@ -224,10 +232,18 @@ class SlideshowActivity : AppCompatActivity() {
                 }
             },
             onError = {
-                zoomManager.setInitialScale(nextImageView, photoListManager.getCurrentIndex(), photoListManager.getSettings())
+                val settings = photoListManager.getSettings()
+                val photoIndex = photoListManager.getCurrentIndex()
+
+                zoomManager.setInitialScale(nextImageView, photoIndex, settings)
+
+                // For SINEWAVE: Start zoom immediately when image loads (before transition)
+                // For SAWTOOTH: Zoom will start when transition begins
+                zoomManager.startZoomOnView(nextImageView, photoIndex, settings, isPreTransition = true)
+
                 transitionManager.performTransition(
-                    settings = photoListManager.getSettings(),
-                    photoIndex = photoListManager.getCurrentIndex(),
+                    settings = settings,
+                    photoIndex = photoIndex,
                     fastTransition = fastTransition
                 ) { updatedViewReferences ->
                     // CRITICAL FIX: Update our view references to match the transition manager

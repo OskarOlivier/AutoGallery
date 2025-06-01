@@ -1,4 +1,4 @@
-// Fixed ImageTransitionManager.kt - Returns current view references after swap
+// Fixed ImageTransitionManager.kt - Handles zoom timing based on zoom type
 package com.meerkat.autogallery
 
 import android.animation.AnimatorSet
@@ -118,8 +118,8 @@ class ImageTransitionManager(
             swapBackgroundViews()
         }
 
-        // Start zoom immediately on the first image
-        zoomManager.startZoomOnView(currentImageView, photoIndex, settings)
+        // For first image, always start zoom (regardless of zoom type)
+        zoomManager.startZoomOnView(currentImageView, photoIndex, settings, isPreTransition = false)
         isTransitioning = false
         onComplete(getCurrentViewReferences())
     }
@@ -145,7 +145,9 @@ class ImageTransitionManager(
 
         animatorSet.addListener(object : android.animation.AnimatorListenerAdapter() {
             override fun onAnimationStart(animation: android.animation.Animator) {
-                zoomManager.startZoomOnView(nextImageView, photoIndex, settings)
+                // Start zoom when transition begins (for SAWTOOTH)
+                // For SINEWAVE, zoom is already running from pre-transition call
+                startZoomIfNeeded(settings, photoIndex)
             }
 
             override fun onAnimationEnd(animation: android.animation.Animator) {
@@ -179,6 +181,9 @@ class ImageTransitionManager(
             SlideDirection.DOWN -> Pair(-slideDistance, slideDistance)
         }
 
+        // Only reset translation/rotation, preserve zoom for SINEWAVE seamless slides
+        resetPositionsForSlide()
+
         // Stage views for slide
         stageNextViewOffScreen(direction, nextStartPos)
         if (settings.enableBlurredBackground) {
@@ -211,7 +216,9 @@ class ImageTransitionManager(
 
         animatorSet.addListener(object : android.animation.AnimatorListenerAdapter() {
             override fun onAnimationStart(animation: android.animation.Animator) {
-                zoomManager.startZoomOnView(nextImageView, photoIndex, settings)
+                // Start zoom when transition begins (for SAWTOOTH)
+                // For SINEWAVE, zoom is already running from pre-transition call
+                startZoomIfNeeded(settings, photoIndex)
             }
 
             override fun onAnimationEnd(animation: android.animation.Animator) {
@@ -222,13 +229,43 @@ class ImageTransitionManager(
         return animatorSet
     }
 
+    // NEW METHOD: Start zoom only for SAWTOOTH mode (SINEWAVE already running)
+    private fun startZoomIfNeeded(settings: GallerySettings, photoIndex: Int) {
+        when (settings.zoomType) {
+            ZoomType.SAWTOOTH -> {
+                // SAWTOOTH: Start zoom when transition begins
+                Log.d(TAG, "Starting SAWTOOTH zoom at transition start")
+                zoomManager.startZoomOnView(nextImageView, photoIndex, settings, isPreTransition = false)
+            }
+            ZoomType.SINE_WAVE -> {
+                // SINEWAVE: Zoom already started in pre-transition, no need to start again
+                Log.d(TAG, "SINEWAVE zoom already running from pre-transition")
+            }
+        }
+    }
+
     private fun resetViewStates() {
         listOf(currentImageView, nextImageView, currentBackgroundImageView, nextBackgroundImageView).forEach { view ->
             view.translationX = 0f
             view.translationY = 0f
             view.rotation = 0f
-            view.scaleX = 1f
-            view.scaleY = 1f
+            // Don't reset scale - preserve zoom during transitions
+        }
+
+        currentImageView.alpha = 1f
+        nextImageView.alpha = 0f
+        currentBackgroundImageView.alpha = 1f
+        nextBackgroundImageView.alpha = 0f
+    }
+
+    // NEW METHOD: Only reset positioning for slide transitions, preserve zoom animations
+    private fun resetPositionsForSlide() {
+        Log.d(TAG, "Resetting positions for slide (preserving zoom)")
+        listOf(currentImageView, nextImageView, currentBackgroundImageView, nextBackgroundImageView).forEach { view ->
+            view.translationX = 0f
+            view.translationY = 0f
+            view.rotation = 0f
+            // Explicitly preserve scaleX and scaleY for seamless zoom during slides
         }
 
         currentImageView.alpha = 1f
@@ -303,13 +340,28 @@ class ImageTransitionManager(
             swapBackgroundViews()
         }
 
-        // Reset all views to clean state
-        resetFinalViewStates()
+        // Reset positions but preserve zoom animations for seamless SINEWAVE
+        resetPositionsAfterSlide()
         Log.d(TAG, "Slide transition completed")
     }
 
-    private fun resetFinalViewStates() {
+    // NEW METHOD: Reset positions after slide while preserving zoom
+    private fun resetPositionsAfterSlide() {
         currentImageView.apply {
+            translationX = 0f
+            translationY = 0f
+            // Preserve scaleX and scaleY for ongoing zoom
+            alpha = 1f
+        }
+
+        nextImageView.apply {
+            translationX = 0f
+            translationY = 0f
+            // Preserve scaleX and scaleY in case next image has zoom animation ready
+            alpha = 0f
+        }
+
+        currentBackgroundImageView.apply {
             translationX = 0f
             translationY = 0f
             scaleX = 1f
@@ -317,11 +369,27 @@ class ImageTransitionManager(
             alpha = 1f
         }
 
-        nextImageView.apply {
+        nextBackgroundImageView.apply {
             translationX = 0f
             translationY = 0f
             scaleX = 1f
             scaleY = 1f
+            alpha = 0f
+        }
+    }
+
+    private fun resetFinalViewStates() {
+        currentImageView.apply {
+            translationX = 0f
+            translationY = 0f
+            // Don't reset scale - preserve zoom state
+            alpha = 1f
+        }
+
+        nextImageView.apply {
+            translationX = 0f
+            translationY = 0f
+            // Don't reset scale - in case it has ongoing zoom animation
             alpha = 0f
         }
 
@@ -350,8 +418,8 @@ class ImageTransitionManager(
         currentImageView.alpha = 1f
         nextImageView.alpha = 0f
 
-        nextImageView.scaleX = 1f
-        nextImageView.scaleY = 1f
+        // Reset only translation for next view (which is now the old current view)
+        // Don't reset scale - let zoom animations continue seamlessly
         nextImageView.translationX = 0f
         nextImageView.translationY = 0f
     }
@@ -364,8 +432,7 @@ class ImageTransitionManager(
         currentBackgroundImageView.alpha = 1f
         nextBackgroundImageView.alpha = 0f
 
-        nextBackgroundImageView.scaleX = 1f
-        nextBackgroundImageView.scaleY = 1f
+        // Reset translation but preserve any scaling
         nextBackgroundImageView.translationX = 0f
         nextBackgroundImageView.translationY = 0f
     }
