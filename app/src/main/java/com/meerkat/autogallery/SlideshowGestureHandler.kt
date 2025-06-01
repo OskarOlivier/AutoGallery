@@ -1,10 +1,7 @@
-// SlideshowGestureHandler.kt - Handles all gesture detection and processing
+// SlideshowGestureHandler.kt - Enhanced gesture handling with swipe-to-slide mapping
 package com.meerkat.autogallery
 
 import android.content.Context
-import android.os.Build
-import android.os.VibrationEffect
-import android.os.Vibrator
 import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -17,8 +14,8 @@ class SlideshowGestureHandler(
     private val uiManager: SlideshowUIManager,
     private val photoListManager: PhotoListManager,
     private val onPauseToggle: () -> Unit,
-    private val onNavigateToNext: () -> Unit,
-    private val onNavigateToPrevious: () -> Unit,
+    private val onNavigateToNext: (swipeDirection: SwipeDirection?) -> Unit,
+    private val onNavigateToPrevious: (swipeDirection: SwipeDirection?) -> Unit,
     private val onExit: () -> Unit
 ) {
 
@@ -27,6 +24,10 @@ class SlideshowGestureHandler(
     private var lastGestureTime = 0L
     private var screenWidth = 0
     private var screenHeight = 0
+
+    enum class SwipeDirection {
+        LEFT, RIGHT
+    }
 
     companion object {
         private const val TAG = "SlideshowGestureHandler"
@@ -49,7 +50,6 @@ class SlideshowGestureHandler(
                 if (!shouldProcessGesture()) return false
                 Log.d(TAG, "Single tap detected")
                 togglePauseResume()
-                provideFeedback(if (isPaused) "pause" else "resume")
                 return true
             }
 
@@ -57,7 +57,6 @@ class SlideshowGestureHandler(
                 if (!shouldProcessGesture()) return false
                 Log.d(TAG, "Double tap detected - exiting slideshow")
                 uiManager.showExitFeedback()
-                provideFeedback("exit")
                 onExit()
                 return true
             }
@@ -70,7 +69,6 @@ class SlideshowGestureHandler(
             ): Boolean {
                 if (!shouldProcessGesture() || !isValidGesture(e1, e2)) return false
 
-                // Safe access to e1 properties since e1 can be null
                 e1?.let { startEvent ->
                     val deltaX = e2.x - startEvent.x
                     val deltaY = e2.y - startEvent.y
@@ -81,15 +79,13 @@ class SlideshowGestureHandler(
                         abs(velocityX) > MIN_SWIPE_VELOCITY) {
 
                         if (deltaX > 0) {
-                            // Swipe right - go to previous image
-                            Log.d(TAG, "Swipe right - previous image")
-                            onNavigateToPrevious()
-                            provideFeedback("previous")
+                            // Swipe right - go to previous image with slide right animation
+                            Log.d(TAG, "Swipe right - previous image with slide right")
+                            onNavigateToPrevious(SwipeDirection.RIGHT)
                         } else {
-                            // Swipe left - go to next image
-                            Log.d(TAG, "Swipe left - next image")
-                            onNavigateToNext()
-                            provideFeedback("next")
+                            // Swipe left - go to next image with slide left animation
+                            Log.d(TAG, "Swipe left - next image with slide left")
+                            onNavigateToNext(SwipeDirection.LEFT)
                         }
                         return true
                     }
@@ -143,18 +139,8 @@ class SlideshowGestureHandler(
         return true
     }
 
-    private fun provideFeedback(action: String) {
-        // Subtle haptic feedback
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-                vibrator?.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not provide haptic feedback", e)
-        }
-
-        // Hide gesture hints if they're showing
+    // Hide gesture hints when user interacts
+    private fun hideGestureHints() {
         uiManager.hideGestureHints()
     }
 

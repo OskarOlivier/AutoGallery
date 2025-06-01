@@ -1,4 +1,4 @@
-// Fixed SlideshowActivity.kt - Implements zoom timing based on zoom type
+// SlideshowActivity.kt - Updated with gesture-driven transitions
 package com.meerkat.autogallery
 
 import android.content.BroadcastReceiver
@@ -112,7 +112,6 @@ class SlideshowActivity : AppCompatActivity() {
         pauseIndicator = findViewById(R.id.pauseIndicator)
         gestureHints = findViewById(R.id.gestureHints)
 
-        // Initially hide the next image views and overlays
         nextImageView.alpha = 0f
         nextBackgroundImageView.alpha = 0f
         pauseIndicator.visibility = android.view.View.GONE
@@ -122,7 +121,6 @@ class SlideshowActivity : AppCompatActivity() {
     private fun initManagers() {
         preferencesManager = PreferencesManager(this)
 
-        // Initialize managers with dependencies
         uiManager = SlideshowUIManager(this, pauseIndicator, gestureHints)
         photoListManager = PhotoListManager(this, preferencesManager)
         imageLoader = SlideshowImageLoader(this)
@@ -197,7 +195,11 @@ class SlideshowActivity : AppCompatActivity() {
         }
     }
 
-    private fun showNextImage(fastTransition: Boolean = false) {
+    private fun showNextImage(
+        fastTransition: Boolean = false,
+        swipeDirection: SlideshowGestureHandler.SwipeDirection? = null,
+        resumeAutomaticProgression: Boolean = false
+    ) {
         if (photoListManager.getCurrentPhotoList().isEmpty() || !isActivityActive) return
 
         val currentPhoto = photoListManager.getCurrentPhoto()
@@ -212,21 +214,20 @@ class SlideshowActivity : AppCompatActivity() {
                 val photoIndex = photoListManager.getCurrentIndex()
 
                 zoomManager.setInitialScale(nextImageView, photoIndex, settings)
-
-                // For SINEWAVE: Start zoom immediately when image loads (before transition)
-                // For SAWTOOTH: Zoom will start when transition begins
                 zoomManager.startZoomOnView(nextImageView, photoIndex, settings, isPreTransition = true)
 
                 transitionManager.performTransition(
                     settings = settings,
                     photoIndex = photoIndex,
-                    fastTransition = fastTransition
+                    fastTransition = fastTransition,
+                    swipeDirection = swipeDirection
                 ) { updatedViewReferences ->
-                    // CRITICAL FIX: Update our view references to match the transition manager
                     updateViewReferences(updatedViewReferences)
 
-                    // Schedule next image only if not paused and not a manual fast transition
-                    if (!fastTransition && !gestureHandler.isPaused()) {
+                    // Resume automatic progression if:
+                    // 1. Normal transition (!fastTransition) OR fast transition that should resume (resumeAutomaticProgression)
+                    // 2. AND slideshow is not paused
+                    if ((!fastTransition || resumeAutomaticProgression) && !gestureHandler.isPaused()) {
                         scheduleNextImage()
                     }
                 }
@@ -236,20 +237,17 @@ class SlideshowActivity : AppCompatActivity() {
                 val photoIndex = photoListManager.getCurrentIndex()
 
                 zoomManager.setInitialScale(nextImageView, photoIndex, settings)
-
-                // For SINEWAVE: Start zoom immediately when image loads (before transition)
-                // For SAWTOOTH: Zoom will start when transition begins
                 zoomManager.startZoomOnView(nextImageView, photoIndex, settings, isPreTransition = true)
 
                 transitionManager.performTransition(
                     settings = settings,
                     photoIndex = photoIndex,
-                    fastTransition = fastTransition
+                    fastTransition = fastTransition,
+                    swipeDirection = swipeDirection
                 ) { updatedViewReferences ->
-                    // CRITICAL FIX: Update our view references to match the transition manager
                     updateViewReferences(updatedViewReferences)
 
-                    if (!fastTransition && !gestureHandler.isPaused()) {
+                    if ((!fastTransition || resumeAutomaticProgression) && !gestureHandler.isPaused()) {
                         scheduleNextImage()
                     }
                 }
@@ -257,7 +255,6 @@ class SlideshowActivity : AppCompatActivity() {
         )
     }
 
-    // NEW METHOD: Synchronize view references with transition manager
     private fun updateViewReferences(viewReferences: ImageTransitionManager.ViewReferences) {
         Log.d(TAG, "Updating view references to match transition manager")
 
@@ -266,9 +263,7 @@ class SlideshowActivity : AppCompatActivity() {
         currentBackgroundImageView = viewReferences.currentBackgroundView
         nextBackgroundImageView = viewReferences.nextBackgroundView
 
-        Log.d(TAG, "View references synchronized - " +
-                "currentImageView: ${currentImageView.id}, " +
-                "nextImageView: ${nextImageView.id}")
+        Log.d(TAG, "View references synchronized")
     }
 
     private fun scheduleNextImage() {
@@ -283,7 +278,7 @@ class SlideshowActivity : AppCompatActivity() {
         }, photoListManager.getSettings().slideDuration.toLong())
     }
 
-    // Gesture handler callbacks
+    // Updated gesture handler callbacks with swipe direction support
     private fun onPauseToggle() {
         if (gestureHandler.isPaused()) {
             handler.removeCallbacksAndMessages(null)
@@ -296,7 +291,7 @@ class SlideshowActivity : AppCompatActivity() {
         }
     }
 
-    private fun onNavigateToNext() {
+    private fun onNavigateToNext(swipeDirection: SlideshowGestureHandler.SwipeDirection?) {
         if (transitionManager.isTransitioning()) return
 
         val wasRunning = !gestureHandler.isPaused()
@@ -305,10 +300,14 @@ class SlideshowActivity : AppCompatActivity() {
         }
 
         photoListManager.moveToNext()
-        showNextImage(fastTransition = true)
+        showNextImage(
+            fastTransition = true,
+            swipeDirection = swipeDirection,
+            resumeAutomaticProgression = wasRunning
+        )
     }
 
-    private fun onNavigateToPrevious() {
+    private fun onNavigateToPrevious(swipeDirection: SlideshowGestureHandler.SwipeDirection?) {
         if (transitionManager.isTransitioning()) return
 
         val wasRunning = !gestureHandler.isPaused()
@@ -317,7 +316,11 @@ class SlideshowActivity : AppCompatActivity() {
         }
 
         photoListManager.moveToPrevious()
-        showNextImage(fastTransition = true)
+        showNextImage(
+            fastTransition = true,
+            swipeDirection = swipeDirection,
+            resumeAutomaticProgression = wasRunning
+        )
     }
 
     private fun onExit() {

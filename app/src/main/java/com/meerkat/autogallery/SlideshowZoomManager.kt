@@ -1,4 +1,4 @@
-// SlideshowZoomManager.kt - Handles zoom animations with sawtooth vs sinewave behavior
+// SlideshowZoomManager.kt - Let zoom animations complete naturally when paused
 package com.meerkat.autogallery
 
 import android.animation.AnimatorSet
@@ -9,7 +9,8 @@ import android.widget.ImageView
 
 class SlideshowZoomManager {
 
-    private var currentZoomAnimator: ObjectAnimator? = null
+    private var currentZoomAnimatorSet: AnimatorSet? = null
+    private var isPaused = false
 
     companion object {
         private const val TAG = "SlideshowZoomManager"
@@ -35,13 +36,16 @@ class SlideshowZoomManager {
         Log.d(TAG, "Set initial scale $initialScale for image at index $photoIndex")
     }
 
-    // For SINEWAVE: Start zoom immediately when image is loaded
-    // For SAWTOOTH: Start zoom when transition begins
     fun startZoomOnView(imageView: ImageView, photoIndex: Int, settings: GallerySettings, isPreTransition: Boolean = false) {
+        // Don't start NEW zoom animations if currently paused (let existing ones complete)
+        if (isPaused) {
+            Log.d(TAG, "Zoom manager is paused, not starting new zoom animation")
+            return
+        }
+
         when (settings.zoomType) {
             ZoomType.SAWTOOTH -> {
                 if (isPreTransition) {
-                    // For SAWTOOTH, don't start zoom before transition - wait for transition start
                     Log.d(TAG, "SAWTOOTH mode: deferring zoom until transition starts")
                     return
                 } else {
@@ -50,11 +54,9 @@ class SlideshowZoomManager {
             }
             ZoomType.SINE_WAVE -> {
                 if (isPreTransition) {
-                    // For SINEWAVE, start zoom immediately when image loads
                     startSinewaveZoom(imageView, photoIndex, settings)
                 } else {
-                    // If zoom isn't already running, start it
-                    if (currentZoomAnimator?.isRunning != true) {
+                    if (currentZoomAnimatorSet?.isRunning != true) {
                         startSinewaveZoom(imageView, photoIndex, settings)
                     }
                 }
@@ -63,11 +65,9 @@ class SlideshowZoomManager {
     }
 
     private fun startSawtoothZoom(imageView: ImageView, photoIndex: Int, settings: GallerySettings) {
-        // Cancel any existing zoom animation
-        currentZoomAnimator?.cancel()
+        currentZoomAnimatorSet?.cancel()
 
         val zoomScale = 1f + (settings.zoomAmount / 100f)
-        // SAWTOOTH always zooms from 1.0 to max zoom
         val startScale = 1f
         val endScale = zoomScale
 
@@ -77,8 +77,7 @@ class SlideshowZoomManager {
     }
 
     private fun startSinewaveZoom(imageView: ImageView, photoIndex: Int, settings: GallerySettings) {
-        // Cancel any existing zoom animation
-        currentZoomAnimator?.cancel()
+        currentZoomAnimatorSet?.cancel()
 
         val zoomScale = 1f + (settings.zoomAmount / 100f)
 
@@ -94,7 +93,6 @@ class SlideshowZoomManager {
     }
 
     private fun startZoomAnimation(imageView: ImageView, startScale: Float, endScale: Float, duration: Long) {
-        // Set initial scale
         imageView.scaleX = startScale
         imageView.scaleY = startScale
 
@@ -111,26 +109,29 @@ class SlideshowZoomManager {
         val animatorSet = AnimatorSet()
         animatorSet.playTogether(scaleXAnimator, scaleYAnimator)
 
-        // Update reference to track the current animation
-        currentZoomAnimator = scaleXAnimator
+        // Store reference to the AnimatorSet (not just one animator)
+        currentZoomAnimatorSet = animatorSet
 
         animatorSet.start()
     }
 
     fun pauseZoom() {
-        currentZoomAnimator?.cancel()
-        Log.d(TAG, "Zoom animation paused")
+        Log.d(TAG, "Slideshow paused - letting current zoom animation complete naturally")
+        isPaused = true
+        // Don't cancel the animation - let it complete naturally
+        // This ensures both X and Y animations finish together
     }
 
     fun resumeZoom(imageView: ImageView, photoIndex: Int, settings: GallerySettings) {
-        // Resume zoom from current scale
-        startZoomOnView(imageView, photoIndex, settings, isPreTransition = false)
-        Log.d(TAG, "Zoom animation resumed")
+        Log.d(TAG, "Slideshow resumed - ready for new zoom animations")
+        isPaused = false
+        // Don't restart zoom for current image - new images will start fresh zoom animations
     }
 
     fun cleanup() {
-        currentZoomAnimator?.cancel()
-        currentZoomAnimator = null
+        currentZoomAnimatorSet?.cancel()
+        currentZoomAnimatorSet = null
+        isPaused = false
         Log.d(TAG, "Zoom manager cleaned up")
     }
 }

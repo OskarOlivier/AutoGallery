@@ -40,24 +40,25 @@
         android:alpha="0"
         android:contentDescription="Next slideshow image" />
 
-    <!-- Pause indicator -->
+    <!-- Pause indicator - moved to bottom center with reduced size -->
     <LinearLayout
         android:id="@+id/pauseIndicator"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="center"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="32dp"
         android:orientation="horizontal"
-        android:background="@drawable/pause_indicator_background"
-        android:padding="20dp"
+        android:background="@color/black"
+        android:padding="12dp"
         android:visibility="gone"
         android:elevation="10dp">
 
         <ImageView
             android:id="@+id/pauseIcon"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:src="@drawable/ic_pause"
-            android:layout_marginEnd="12dp"
+            android:layout_marginEnd="8dp"
             android:contentDescription="Paused" />
 
         <TextView
@@ -65,7 +66,7 @@
             android:layout_height="wrap_content"
             android:text="Paused"
             android:textColor="@color/white"
-            android:textSize="18sp"
+            android:textSize="14sp"
             android:fontFamily="sans-serif-medium"
             android:layout_gravity="center_vertical" />
 
