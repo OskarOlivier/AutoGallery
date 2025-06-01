@@ -1,4 +1,4 @@
-// SlideshowActivity.kt - Refactored main activity
+// Fixed SlideshowActivity.kt - Synchronizes view references after transitions
 package com.meerkat.autogallery
 
 import android.content.BroadcastReceiver
@@ -213,7 +213,10 @@ class SlideshowActivity : AppCompatActivity() {
                     settings = photoListManager.getSettings(),
                     photoIndex = photoListManager.getCurrentIndex(),
                     fastTransition = fastTransition
-                ) {
+                ) { updatedViewReferences ->
+                    // CRITICAL FIX: Update our view references to match the transition manager
+                    updateViewReferences(updatedViewReferences)
+
                     // Schedule next image only if not paused and not a manual fast transition
                     if (!fastTransition && !gestureHandler.isPaused()) {
                         scheduleNextImage()
@@ -226,13 +229,30 @@ class SlideshowActivity : AppCompatActivity() {
                     settings = photoListManager.getSettings(),
                     photoIndex = photoListManager.getCurrentIndex(),
                     fastTransition = fastTransition
-                ) {
+                ) { updatedViewReferences ->
+                    // CRITICAL FIX: Update our view references to match the transition manager
+                    updateViewReferences(updatedViewReferences)
+
                     if (!fastTransition && !gestureHandler.isPaused()) {
                         scheduleNextImage()
                     }
                 }
             }
         )
+    }
+
+    // NEW METHOD: Synchronize view references with transition manager
+    private fun updateViewReferences(viewReferences: ImageTransitionManager.ViewReferences) {
+        Log.d(TAG, "Updating view references to match transition manager")
+
+        currentImageView = viewReferences.currentImageView
+        nextImageView = viewReferences.nextImageView
+        currentBackgroundImageView = viewReferences.currentBackgroundView
+        nextBackgroundImageView = viewReferences.nextBackgroundView
+
+        Log.d(TAG, "View references synchronized - " +
+                "currentImageView: ${currentImageView.id}, " +
+                "nextImageView: ${nextImageView.id}")
     }
 
     private fun scheduleNextImage() {

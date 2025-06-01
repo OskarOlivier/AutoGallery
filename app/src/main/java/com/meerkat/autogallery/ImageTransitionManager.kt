@@ -1,4 +1,4 @@
-// ImageTransitionManager.kt - Handles transitions between images
+// Fixed ImageTransitionManager.kt - Returns current view references after swap
 package com.meerkat.autogallery
 
 import android.animation.AnimatorSet
@@ -26,7 +26,14 @@ class ImageTransitionManager(
         private const val TAG = "ImageTransitionManager"
     }
 
-    // Slide direction enum for cleaner code
+    // Add data class to return view references
+    data class ViewReferences(
+        val currentImageView: ImageView,
+        val nextImageView: ImageView,
+        val currentBackgroundView: ImageView,
+        val nextBackgroundView: ImageView
+    )
+
     private enum class SlideDirection {
         LEFT, RIGHT, UP, DOWN
     }
@@ -37,11 +44,12 @@ class ImageTransitionManager(
         screenHeight = metrics.heightPixels
     }
 
+    // Modified to return updated view references
     fun performTransition(
         settings: GallerySettings,
         photoIndex: Int,
         fastTransition: Boolean = false,
-        onComplete: () -> Unit
+        onComplete: (ViewReferences) -> Unit  // Modified callback signature
     ) {
         if (isTransitioning) {
             Log.w(TAG, "Transition already in progress, ignoring")
@@ -81,14 +89,29 @@ class ImageTransitionManager(
             override fun onAnimationEnd(animation: android.animation.Animator) {
                 super.onAnimationEnd(animation)
                 isTransitioning = false
-                onComplete()
+                // Return current view references after transition
+                onComplete(getCurrentViewReferences())
             }
         })
 
         animator.start()
     }
 
-    private fun handleFirstImage(settings: GallerySettings, photoIndex: Int, onComplete: () -> Unit) {
+    // Add method to get current view references
+    fun getCurrentViewReferences(): ViewReferences {
+        return ViewReferences(
+            currentImageView = currentImageView,
+            nextImageView = nextImageView,
+            currentBackgroundView = currentBackgroundImageView,
+            nextBackgroundView = nextBackgroundImageView
+        )
+    }
+
+    private fun handleFirstImage(
+        settings: GallerySettings,
+        photoIndex: Int,
+        onComplete: (ViewReferences) -> Unit
+    ) {
         Log.d(TAG, "Showing first image - no transition needed")
         swapImageViews()
         if (settings.enableBlurredBackground) {
@@ -98,7 +121,7 @@ class ImageTransitionManager(
         // Start zoom immediately on the first image
         zoomManager.startZoomOnView(currentImageView, photoIndex, settings)
         isTransitioning = false
-        onComplete()
+        onComplete(getCurrentViewReferences())
     }
 
     private fun createFadeTransition(settings: GallerySettings, photoIndex: Int, duration: Long): AnimatorSet {
