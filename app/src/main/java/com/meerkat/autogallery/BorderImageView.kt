@@ -1,4 +1,4 @@
-// BorderImageView.kt - Custom ImageView with fade-out vignette effect
+// BorderImageView.kt - Custom ImageView with optional edge fade effect
 package com.meerkat.autogallery
 
 import android.content.Context
@@ -12,119 +12,148 @@ class BorderImageView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : AppCompatImageView(context, attrs, defStyleAttr) {
 
-    private val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val fadeWidth = 10f // 10px fade-out width from edges
-
-    // Gradient shaders for each edge - created once and reused
-    private var topGradient: LinearGradient? = null
-    private var bottomGradient: LinearGradient? = null
-    private var leftGradient: LinearGradient? = null
-    private var rightGradient: LinearGradient? = null
-
-    // Flag to track if gradients need to be recreated
-    private var gradientsNeedUpdate = true
-
-    init {
-        // Use DST_IN to mask the image content - keeps only where mask is opaque
-        maskPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
-    }
-
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        super.onSizeChanged(w, h, oldw, oldh)
-        gradientsNeedUpdate = true
-    }
-
-    private fun createGradients(width: Int, height: Int) {
-        if (!gradientsNeedUpdate || width <= 0 || height <= 0) return
-
-        // Colors: fully opaque (0xFF000000) at inner edge to transparent (0x00000000) at outer edge
-        val opaqueBlack = 0xFF000000.toInt()
-        val transparent = 0x00000000
-
-        // Top edge fade (vertical gradient from top edge inward)
-        topGradient = LinearGradient(
-            0f, 0f,
-            0f, fadeWidth,
-            transparent, opaqueBlack,
-            Shader.TileMode.CLAMP
-        )
-
-        // Bottom edge fade (vertical gradient from bottom edge inward)
-        bottomGradient = LinearGradient(
-            0f, height.toFloat(),
-            0f, height - fadeWidth,
-            transparent, opaqueBlack,
-            Shader.TileMode.CLAMP
-        )
-
-        // Left edge fade (horizontal gradient from left edge inward)
-        leftGradient = LinearGradient(
-            0f, 0f,
-            fadeWidth, 0f,
-            transparent, opaqueBlack,
-            Shader.TileMode.CLAMP
-        )
-
-        // Right edge fade (horizontal gradient from right edge inward)
-        rightGradient = LinearGradient(
-            width.toFloat(), 0f,
-            width - fadeWidth, 0f,
-            transparent, opaqueBlack,
-            Shader.TileMode.CLAMP
-        )
-
-        gradientsNeedUpdate = false
-    }
+    private val fadeWidth = 100f
+    private val edgeOverlap = 4f
+    var featheringEnabled = true // Can be set programmatically
 
     override fun onDraw(canvas: Canvas) {
-        val width = width
-        val height = height
+        val viewWidth = width
+        val viewHeight = height
 
-        if (width <= 0 || height <= 0) {
+        if (viewWidth <= 0 || viewHeight <= 0 || drawable == null) {
             super.onDraw(canvas)
             return
         }
 
-        createGradients(width, height)
+        if (!featheringEnabled) {
+            super.onDraw(canvas)
+            return
+        }
 
-        // Draw the image first on a separate layer
-        val saveCount = canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
+        val imageBounds = calculateImageBounds(viewWidth, viewHeight)
 
-        // Draw the image content
+        val layerPaint = Paint()
+        val saveCount = canvas.saveLayer(imageBounds.left, imageBounds.top, imageBounds.right, imageBounds.bottom, layerPaint)
+
         super.onDraw(canvas)
+        applyTransparencyMask(canvas, imageBounds, viewWidth, viewHeight)
 
-        // Apply fade-out mask on all four edges
-        drawFadeOutMask(canvas, width, height)
-
-        // Restore canvas state
         canvas.restoreToCount(saveCount)
     }
 
-    private fun drawFadeOutMask(canvas: Canvas, width: Int, height: Int) {
-        // Draw fade mask rectangles that will make the edges transparent
+    private fun calculateImageBounds(viewWidth: Int, viewHeight: Int): RectF {
+        val drawable = drawable ?: return RectF(0f, 0f, viewWidth.toFloat(), viewHeight.toFloat())
+
+        val imageWidth = drawable.intrinsicWidth.toFloat()
+        val imageHeight = drawable.intrinsicHeight.toFloat()
+
+        if (imageWidth <= 0 || imageHeight <= 0) {
+            return RectF(0f, 0f, viewWidth.toFloat(), viewHeight.toFloat())
+        }
+
+        when (scaleType) {
+            ScaleType.CENTER_INSIDE -> {
+                val scale = minOf(viewWidth / imageWidth, viewHeight / imageHeight)
+                val scaledWidth = imageWidth * scale
+                val scaledHeight = imageHeight * scale
+                val left = (viewWidth - scaledWidth) / 2f
+                val top = (viewHeight - scaledHeight) / 2f
+                return RectF(left, top, left + scaledWidth, top + scaledHeight)
+            }
+
+            ScaleType.CENTER_CROP -> {
+                val scale = maxOf(viewWidth / imageWidth, viewHeight / imageHeight)
+                val scaledWidth = imageWidth * scale
+                val scaledHeight = imageHeight * scale
+                val left = (viewWidth - scaledWidth) / 2f
+                val top = (viewHeight - scaledHeight) / 2f
+                return RectF(left, top, left + scaledWidth, top + scaledHeight)
+            }
+
+            ScaleType.MATRIX -> {
+                val matrix = imageMatrix
+                val values = FloatArray(9)
+                matrix.getValues(values)
+                val scaleX = values[Matrix.MSCALE_X]
+                val scaleY = values[Matrix.MSCALE_Y]
+                val transX = values[Matrix.MTRANS_X]
+                val transY = values[Matrix.MTRANS_Y]
+
+                val scaledWidth = imageWidth * scaleX
+                val scaledHeight = imageHeight * scaleY
+                return RectF(transX, transY, transX + scaledWidth, transY + scaledHeight)
+            }
+
+            else -> {
+                return RectF(0f, 0f, viewWidth.toFloat(), viewHeight.toFloat())
+            }
+        }
+    }
+
+    private fun applyTransparencyMask(canvas: Canvas, imageBounds: RectF, viewWidth: Int, viewHeight: Int) {
+        val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+        maskPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+
+        val effectiveFadeWidth = fadeWidth - edgeOverlap
 
         // Top edge fade
-        topGradient?.let { gradient ->
-            maskPaint.shader = gradient
-            canvas.drawRect(0f, 0f, width.toFloat(), fadeWidth, maskPaint)
+        if (imageBounds.top > 0) {
+            val fadeStart = imageBounds.top
+            val fadeEnd = minOf(imageBounds.top + effectiveFadeWidth, imageBounds.bottom)
+            if (fadeEnd > fadeStart) {
+                val shader = LinearGradient(
+                    0f, fadeStart, 0f, fadeEnd,
+                    0x00FFFFFF, 0xFFFFFFFF.toInt(),
+                    Shader.TileMode.CLAMP
+                )
+                maskPaint.shader = shader
+                canvas.drawRect(imageBounds.left - edgeOverlap, fadeStart - edgeOverlap, imageBounds.right + edgeOverlap, fadeEnd, maskPaint)
+            }
         }
 
         // Bottom edge fade
-        bottomGradient?.let { gradient ->
-            maskPaint.shader = gradient
-            canvas.drawRect(0f, height - fadeWidth, width.toFloat(), height.toFloat(), maskPaint)
+        if (imageBounds.bottom < viewHeight) {
+            val fadeStart = imageBounds.bottom
+            val fadeEnd = maxOf(imageBounds.bottom - effectiveFadeWidth, imageBounds.top)
+            if (fadeStart > fadeEnd) {
+                val shader = LinearGradient(
+                    0f, fadeStart, 0f, fadeEnd,
+                    0x00FFFFFF, 0xFFFFFFFF.toInt(),
+                    Shader.TileMode.CLAMP
+                )
+                maskPaint.shader = shader
+                canvas.drawRect(imageBounds.left - edgeOverlap, fadeEnd, imageBounds.right + edgeOverlap, fadeStart + edgeOverlap, maskPaint)
+            }
         }
 
         // Left edge fade
-        leftGradient?.let { gradient ->
-            maskPaint.shader = gradient
-            canvas.drawRect(0f, 0f, fadeWidth, height.toFloat(), maskPaint)
+        if (imageBounds.left > 0) {
+            val fadeStart = imageBounds.left
+            val fadeEnd = minOf(imageBounds.left + effectiveFadeWidth, imageBounds.right)
+            if (fadeEnd > fadeStart) {
+                val shader = LinearGradient(
+                    fadeStart, 0f, fadeEnd, 0f,
+                    0x00FFFFFF, 0xFFFFFFFF.toInt(),
+                    Shader.TileMode.CLAMP
+                )
+                maskPaint.shader = shader
+                canvas.drawRect(fadeStart - edgeOverlap, imageBounds.top - edgeOverlap, fadeEnd, imageBounds.bottom + edgeOverlap, maskPaint)
+            }
         }
 
         // Right edge fade
-        rightGradient?.let { gradient ->
-            maskPaint.shader = gradient
-            canvas.drawRect(width - fadeWidth, 0f, width.toFloat(), height.toFloat(), maskPaint)
+        if (imageBounds.right < viewWidth) {
+            val fadeStart = imageBounds.right
+            val fadeEnd = maxOf(imageBounds.right - effectiveFadeWidth, imageBounds.left)
+            if (fadeStart > fadeEnd) {
+                val shader = LinearGradient(
+                    fadeStart, 0f, fadeEnd, 0f,
+                    0x00FFFFFF, 0xFFFFFFFF.toInt(),
+                    Shader.TileMode.CLAMP
+                )
+                maskPaint.shader = shader
+                canvas.drawRect(fadeEnd, imageBounds.top - edgeOverlap, fadeStart + edgeOverlap, imageBounds.bottom + edgeOverlap, maskPaint)
+            }
         }
     }
 }

@@ -30,6 +30,7 @@ class PreferencesManager(context: Context) {
             putBoolean("enable_always", settings.enableAlways)
             putBoolean("enable_orientation_filtering", settings.enableOrientationFiltering)
             putBoolean("show_square_images_in_both_orientations", settings.showSquareImagesInBothOrientations)
+            putBoolean("enable_feathering", settings.enableFeathering)
             apply()
         }
     }
@@ -80,7 +81,8 @@ class PreferencesManager(context: Context) {
             enableOnCharging = prefs.getBoolean("enable_on_charging", false),
             enableAlways = prefs.getBoolean("enable_always", true),
             enableOrientationFiltering = prefs.getBoolean("enable_orientation_filtering", true),
-            showSquareImagesInBothOrientations = prefs.getBoolean("show_square_images_in_both_orientations", true)
+            showSquareImagesInBothOrientations = prefs.getBoolean("show_square_images_in_both_orientations", true),
+            enableFeathering = prefs.getBoolean("enable_feathering", true)
         )
     }
 

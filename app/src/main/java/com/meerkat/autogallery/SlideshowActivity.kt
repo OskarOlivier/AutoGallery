@@ -1,4 +1,4 @@
-// SlideshowActivity.kt - Updated with battery management
+// SlideshowActivity.kt - Updated with feathering support
 package com.meerkat.autogallery
 
 import android.content.BroadcastReceiver
@@ -19,8 +19,8 @@ import androidx.appcompat.app.AppCompatActivity
 class SlideshowActivity : AppCompatActivity() {
 
     // UI Components
-    private lateinit var currentImageView: ImageView
-    private lateinit var nextImageView: ImageView
+    private lateinit var currentImageView: BorderImageView
+    private lateinit var nextImageView: BorderImageView
     private lateinit var currentBackgroundImageView: ImageView
     private lateinit var nextBackgroundImageView: ImageView
     private lateinit var pauseIndicator: LinearLayout
@@ -177,6 +177,11 @@ class SlideshowActivity : AppCompatActivity() {
         uiManager.setupFullscreen()
         gestureHandler.setupGestureDetection(findViewById(R.id.slideshowContainer))
         photoListManager.loadAndFilterPhotos()
+
+        // Apply feathering setting to BorderImageViews
+        val settings = photoListManager.getSettings()
+        currentImageView.featheringEnabled = settings.enableFeathering
+        nextImageView.featheringEnabled = settings.enableFeathering
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -287,6 +292,9 @@ class SlideshowActivity : AppCompatActivity() {
                 val settings = photoListManager.getSettings()
                 val photoIndex = photoListManager.getCurrentIndex()
 
+                // Ensure feathering setting is applied to the image view that will become current
+                nextImageView.featheringEnabled = settings.enableFeathering
+
                 zoomManager.setInitialScale(nextImageView, photoIndex, settings)
                 zoomManager.startZoomOnView(nextImageView, photoIndex, settings, isPreTransition = true)
 
@@ -310,6 +318,9 @@ class SlideshowActivity : AppCompatActivity() {
                 val settings = photoListManager.getSettings()
                 val photoIndex = photoListManager.getCurrentIndex()
 
+                // Ensure feathering setting is applied even on error
+                nextImageView.featheringEnabled = settings.enableFeathering
+
                 zoomManager.setInitialScale(nextImageView, photoIndex, settings)
                 zoomManager.startZoomOnView(nextImageView, photoIndex, settings, isPreTransition = true)
 
@@ -332,12 +343,23 @@ class SlideshowActivity : AppCompatActivity() {
     private fun updateViewReferences(viewReferences: ImageTransitionManager.ViewReferences) {
         Log.d(TAG, "Updating view references to match transition manager")
 
-        currentImageView = viewReferences.currentImageView
-        nextImageView = viewReferences.nextImageView
+        // Update view references and ensure feathering settings are maintained
+        val featheringEnabled = photoListManager.getSettings().enableFeathering
+
+        if (viewReferences.currentImageView is BorderImageView) {
+            currentImageView = viewReferences.currentImageView
+            currentImageView.featheringEnabled = featheringEnabled
+        }
+
+        if (viewReferences.nextImageView is BorderImageView) {
+            nextImageView = viewReferences.nextImageView
+            nextImageView.featheringEnabled = featheringEnabled
+        }
+
         currentBackgroundImageView = viewReferences.currentBackgroundView
         nextBackgroundImageView = viewReferences.nextBackgroundView
 
-        Log.d(TAG, "View references synchronized")
+        Log.d(TAG, "View references synchronized with feathering enabled: $featheringEnabled")
     }
 
     private fun scheduleNextImage() {

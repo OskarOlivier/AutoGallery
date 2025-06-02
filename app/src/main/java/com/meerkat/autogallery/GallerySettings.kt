@@ -26,7 +26,8 @@ data class GallerySettings(
     val enableOnCharging: Boolean = false,
     val enableAlways: Boolean = true,
     val enableOrientationFiltering: Boolean = true, // New setting to enable/disable orientation filtering
-    val showSquareImagesInBothOrientations: Boolean = true // Whether to show square images in both orientations
+    val showSquareImagesInBothOrientations: Boolean = true, // Whether to show square images in both orientations
+    val enableFeathering: Boolean = true // Enable/disable edge feathering effect
 )
 
 enum class OrderType(val displayName: String) {

@@ -43,6 +43,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var alwaysEnabledCheckbox: MaterialCheckBox
     private lateinit var orientationFilteringCheckbox: MaterialCheckBox
     private lateinit var squareImagesCheckbox: MaterialCheckBox
+    private lateinit var featheringCheckbox: MaterialCheckBox
     private lateinit var checkPermissionsButton: MaterialButton
     private lateinit var permissionStatusText: MaterialTextView
     private lateinit var orientationStatsText: MaterialTextView
@@ -95,6 +96,7 @@ class SettingsActivity : AppCompatActivity() {
         alwaysEnabledCheckbox = findViewById(R.id.alwaysEnabledCheckbox)
         orientationFilteringCheckbox = findViewById(R.id.orientationFilteringCheckbox)
         squareImagesCheckbox = findViewById(R.id.squareImagesCheckbox)
+        featheringCheckbox = findViewById(R.id.featheringCheckbox)
         checkPermissionsButton = findViewById(R.id.checkPermissionsButton)
         permissionStatusText = findViewById(R.id.permissionStatusText)
         orientationStatsText = findViewById(R.id.orientationStatsText)
@@ -143,6 +145,7 @@ class SettingsActivity : AppCompatActivity() {
         alwaysEnabledCheckbox.isChecked = settings.enableAlways
         orientationFilteringCheckbox.isChecked = settings.enableOrientationFiltering
         squareImagesCheckbox.isChecked = settings.showSquareImagesInBothOrientations
+        featheringCheckbox.isChecked = settings.enableFeathering
 
         updateSelectedPhotos()
     }
@@ -190,6 +193,7 @@ class SettingsActivity : AppCompatActivity() {
             saveCurrentSettings()
             updateOrientationStats()
         }
+        featheringCheckbox.setOnCheckedChangeListener { _, _ -> saveCurrentSettings() }
 
         checkPermissionsButton.setOnClickListener {
             requestAllPermissions()
@@ -355,7 +359,8 @@ class SettingsActivity : AppCompatActivity() {
             enableOnCharging = chargingOnlyCheckbox.isChecked,
             enableAlways = alwaysEnabledCheckbox.isChecked,
             enableOrientationFiltering = orientationFilteringCheckbox.isChecked,
-            showSquareImagesInBothOrientations = squareImagesCheckbox.isChecked
+            showSquareImagesInBothOrientations = squareImagesCheckbox.isChecked,
+            enableFeathering = featheringCheckbox.isChecked
         )
 
         preferencesManager.saveSettings(newSettings)
