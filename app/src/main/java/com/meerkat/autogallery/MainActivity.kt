@@ -174,7 +174,7 @@ class MainActivity : AppCompatActivity() {
                         }
                         startActivity(Intent(this, SlideshowActivity::class.java))
                     } else if (settings.folderInfo.uri.isNotEmpty()) {
-                        Toast.makeText(this, "No photos found in selected folder. Try refreshing in Settings.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, "No images found in selected folder. Try refreshing in Settings.", Toast.LENGTH_LONG).show()
                     } else {
                         Toast.makeText(this, "Please select a folder in Settings first", Toast.LENGTH_SHORT).show()
                     }
@@ -233,34 +233,16 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 
-    private fun getBatteryStatusText(settings: GallerySettings): String {
-        val batteryLevel = getBatteryLevel()
-        val isCharging = isDeviceCharging()
-
-        return when (settings.batteryManagementMode) {
-            BatteryManagementMode.CHARGING_ONLY -> {
-                buildString {
-                    append("🔋 $batteryLevel%")
-                    if (isCharging) {
-                        append(" (Charging - Ready)")
-                    } else {
-                        append(" (Not charging - Waiting for charger)")
-                    }
-                }
+    private fun getPortraitModeImageCount(settings: GallerySettings): Int {
+        return if (settings.enableOrientationFiltering) {
+            settings.photoInfoList.count { photoInfo ->
+                OrientationUtils.shouldShowImage(
+                    photoInfo.orientation,
+                    ImageOrientation.PORTRAIT
+                )
             }
-            BatteryManagementMode.BATTERY_LEVEL_ONLY -> {
-                buildString {
-                    append("🔋 $batteryLevel%")
-                    if (isCharging) {
-                        append(" (Charging)")
-                    }
-                    if (batteryLevel <= MIN_BATTERY_LEVEL) {
-                        append(" - Too low for slideshow")
-                    } else {
-                        append(" - Ready")
-                    }
-                }
-            }
+        } else {
+            settings.photoInfoList.size
         }
     }
 
@@ -272,41 +254,9 @@ class MainActivity : AppCompatActivity() {
             val photoCount = settings.photoInfoList.size
             val folderInfo = settings.folderInfo
 
-            val photoCountDetail = if (folderInfo.uri.isNotEmpty() && photoCount > 0) {
+            val imageCountDetail = if (folderInfo.uri.isNotEmpty() && photoCount > 0) {
                 buildString {
                     append("📁 ${folderInfo.displayName}")
-                    appendLine()
-                    append("$photoCount photos scanned")
-
-                    val landscapeCount = settings.photoInfoList.count { it.orientation == ImageOrientation.LANDSCAPE }
-                    val portraitCount = settings.photoInfoList.count { it.orientation == ImageOrientation.PORTRAIT }
-                    val squareCount = settings.photoInfoList.count { it.orientation == ImageOrientation.SQUARE }
-
-                    appendLine()
-
-                    if (settings.enableOrientationFiltering) {
-                        val currentOrientation = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                            ImageOrientation.LANDSCAPE
-                        } else {
-                            ImageOrientation.PORTRAIT
-                        }
-
-                        val availableForCurrentOrientation = settings.photoInfoList.count { photoInfo ->
-                            OrientationUtils.shouldShowImage(
-                                photoInfo.orientation,
-                                currentOrientation
-                            )
-                        }
-
-                        val orientationName = if (currentOrientation == ImageOrientation.LANDSCAPE) "landscape" else "portrait"
-                        append("📱 $availableForCurrentOrientation available in $orientationName mode")
-                        appendLine()
-                        append("🏞️ $landscapeCount landscape • 📱 $portraitCount portrait • ⬜ $squareCount square")
-                    } else {
-                        append("🏞️ $landscapeCount landscape • 📱 $portraitCount portrait • ⬜ $squareCount square")
-                        appendLine()
-                        append("(All photos will be shown - orientation filtering disabled)")
-                    }
 
                     if (folderInfo.lastScanTime > 0) {
                         val timeAgo = System.currentTimeMillis() - folderInfo.lastScanTime
@@ -321,29 +271,50 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     appendLine()
-                    append(getBatteryStatusText(settings))
+                    append("📸 $photoCount images scanned")
+
+                    val landscapeCount = settings.photoInfoList.count { it.orientation == ImageOrientation.LANDSCAPE }
+                    val portraitCount = settings.photoInfoList.count { it.orientation == ImageOrientation.PORTRAIT }
+                    val squareCount = settings.photoInfoList.count { it.orientation == ImageOrientation.SQUARE }
+
+                    appendLine()
+                    append("🏞️ $landscapeCount landscape • 📱 $portraitCount portrait • ⬜ $squareCount square")
+
+                    if (settings.enableOrientationFiltering) {
+                        val landscapeAvailable = settings.photoInfoList.count { photoInfo ->
+                            OrientationUtils.shouldShowImage(
+                                photoInfo.orientation,
+                                ImageOrientation.LANDSCAPE
+                            )
+                        }
+
+                        val portraitAvailable = settings.photoInfoList.count { photoInfo ->
+                            OrientationUtils.shouldShowImage(
+                                photoInfo.orientation,
+                                ImageOrientation.PORTRAIT
+                            )
+                        }
+
+                        appendLine()
+                        append("📱 $landscapeAvailable available in landscape • $portraitAvailable available in portrait")
+                    } else {
+                        appendLine()
+                        append("📱 All images will be shown (orientation filtering disabled)")
+                    }
                 }
             } else if (folderInfo.uri.isNotEmpty()) {
                 buildString {
                     append("📁 ${folderInfo.displayName}")
                     appendLine()
-                    append("No photos found in folder")
+                    append("❌ No images found in folder")
                     appendLine()
-                    append("Use Settings → Refresh to rescan")
-                    appendLine()
-                    append(getBatteryStatusText(settings))
+                    append("💡 Use Settings → Refresh to rescan")
                 }
             } else {
-                buildString {
-                    append("No folder selected")
-                    appendLine()
-                    append("Please select a folder in Settings")
-                    appendLine()
-                    append(getBatteryStatusText(settings))
-                }
+                "📁 No folder selected\n💡 Please select a folder in Settings"
             }
 
-            photoCountText.text = photoCountDetail
+            photoCountText.text = imageCountDetail
 
             statusText.text = when {
                 !settings.isEnabled -> "Auto Gallery is disabled"
@@ -357,7 +328,7 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 }
-                photoCount == 0 -> "No photos found in selected folder"
+                photoCount == 0 -> "No images found in selected folder"
                 settings.enableOrientationFiltering -> {
                     val currentOrientation = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
                         ImageOrientation.LANDSCAPE
@@ -376,7 +347,7 @@ class MainActivity : AppCompatActivity() {
                         "Auto Gallery is active - will start on screen timeout"
                     } else {
                         val orientationName = if (currentOrientation == ImageOrientation.LANDSCAPE) "landscape" else "portrait"
-                        "No photos available for $orientationName mode"
+                        "No images available for $orientationName mode"
                     }
                 }
                 else -> "Auto Gallery is active - will start on screen timeout"

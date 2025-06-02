@@ -18,7 +18,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.checkbox.MaterialCheckBox
+import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.progressindicator.CircularProgressIndicator
 import com.google.android.material.radiobutton.MaterialRadioButton
 import com.google.android.material.slider.Slider
@@ -44,14 +44,14 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var zoomTypeSpinner: Spinner
     private lateinit var zoomAmountSlider: Slider
     private lateinit var zoomAmountText: MaterialTextView
-    private lateinit var blurredBackgroundCheckbox: MaterialCheckBox
+    private lateinit var blurredBackgroundSwitch: SwitchMaterial
     private lateinit var batteryManagementRadioGroup: RadioGroup
     private lateinit var chargingOnlyRadio: MaterialRadioButton
     private lateinit var batteryLevelOnlyRadio: MaterialRadioButton
-    private lateinit var orientationFilteringCheckbox: MaterialCheckBox
+    private lateinit var orientationFilteringSwitch: SwitchMaterial
     private lateinit var squareDetectionSlider: Slider
     private lateinit var squareDetectionText: MaterialTextView
-    private lateinit var featheringCheckbox: MaterialCheckBox
+    private lateinit var featheringSwitch: SwitchMaterial
     private lateinit var checkPermissionsButton: MaterialButton
     private lateinit var permissionStatusText: MaterialTextView
     private lateinit var orientationStatsText: MaterialTextView
@@ -88,10 +88,6 @@ class SettingsActivity : AppCompatActivity() {
         checkPermissionStatus()
         updateFolderInfo()
         updateOrientationStats()
-
-        if (settings.folderInfo.uri.isNotEmpty()) {
-            refreshFolder()
-        }
     }
 
     private fun initViews() {
@@ -107,14 +103,14 @@ class SettingsActivity : AppCompatActivity() {
         zoomTypeSpinner = findViewById(R.id.zoomTypeSpinner)
         zoomAmountSlider = findViewById(R.id.zoomAmountSlider)
         zoomAmountText = findViewById(R.id.zoomAmountText)
-        blurredBackgroundCheckbox = findViewById(R.id.blurredBackgroundCheckbox)
+        blurredBackgroundSwitch = findViewById(R.id.blurredBackgroundSwitch)
         batteryManagementRadioGroup = findViewById(R.id.batteryManagementRadioGroup)
         chargingOnlyRadio = findViewById(R.id.chargingOnlyRadio)
         batteryLevelOnlyRadio = findViewById(R.id.batteryLevelOnlyRadio)
-        orientationFilteringCheckbox = findViewById(R.id.orientationFilteringCheckbox)
+        orientationFilteringSwitch = findViewById(R.id.orientationFilteringSwitch)
         squareDetectionSlider = findViewById(R.id.squareDetectionSlider)
         squareDetectionText = findViewById(R.id.squareDetectionText)
-        featheringCheckbox = findViewById(R.id.featheringCheckbox)
+        featheringSwitch = findViewById(R.id.featheringSwitch)
         checkPermissionsButton = findViewById(R.id.checkPermissionsButton)
         permissionStatusText = findViewById(R.id.permissionStatusText)
         orientationStatsText = findViewById(R.id.orientationStatsText)
@@ -151,17 +147,17 @@ class SettingsActivity : AppCompatActivity() {
         zoomAmountSlider.value = settings.zoomAmount.toFloat()
         updateZoomAmountText(settings.zoomAmount)
 
-        blurredBackgroundCheckbox.isChecked = settings.enableBlurredBackground
+        blurredBackgroundSwitch.isChecked = settings.enableBlurredBackground
 
         when (settings.batteryManagementMode) {
             BatteryManagementMode.CHARGING_ONLY -> chargingOnlyRadio.isChecked = true
             BatteryManagementMode.BATTERY_LEVEL_ONLY -> batteryLevelOnlyRadio.isChecked = true
         }
 
-        orientationFilteringCheckbox.isChecked = settings.enableOrientationFiltering
+        orientationFilteringSwitch.isChecked = settings.enableOrientationFiltering
         squareDetectionSlider.value = settings.squareDetectionSensitivity
         updateSquareDetectionText(settings.squareDetectionSensitivity)
-        featheringCheckbox.isChecked = settings.enableFeathering
+        featheringSwitch.isChecked = settings.enableFeathering
     }
 
     private fun setupListeners() {
@@ -207,13 +203,13 @@ class SettingsActivity : AppCompatActivity() {
             }
         })
 
-        blurredBackgroundCheckbox.setOnCheckedChangeListener { _, _ -> saveCurrentSettings() }
+        blurredBackgroundSwitch.setOnCheckedChangeListener { _, _ -> saveCurrentSettings() }
         batteryManagementRadioGroup.setOnCheckedChangeListener { _, _ -> saveCurrentSettings() }
-        orientationFilteringCheckbox.setOnCheckedChangeListener { _, _ ->
+        orientationFilteringSwitch.setOnCheckedChangeListener { _, _ ->
             saveCurrentSettings()
             updateOrientationStats()
         }
-        featheringCheckbox.setOnCheckedChangeListener { _, _ -> saveCurrentSettings() }
+        featheringSwitch.setOnCheckedChangeListener { _, _ -> saveCurrentSettings() }
 
         checkPermissionsButton.setOnClickListener {
             requestAllPermissions()
@@ -394,12 +390,7 @@ class SettingsActivity : AppCompatActivity() {
             append("📱 ${portraitCount} portrait, ")
             append("⬜ ${squareCount} square")
 
-            if (orientationFilteringCheckbox.isChecked) {
-                appendLine()
-                append("✅ Orientation filtering enabled")
-                appendLine()
-                append("⬜ Square images always shown in both orientations")
-            } else {
+            if (!orientationFilteringSwitch.isChecked) {
                 appendLine()
                 append("❌ Orientation filtering disabled (all images shown)")
             }
@@ -421,11 +412,11 @@ class SettingsActivity : AppCompatActivity() {
             transitionType = TransitionType.values()[transitionTypeSpinner.selectedItemPosition],
             zoomType = ZoomType.values()[zoomTypeSpinner.selectedItemPosition],
             zoomAmount = zoomAmountSlider.value.toInt(),
-            enableBlurredBackground = blurredBackgroundCheckbox.isChecked,
+            enableBlurredBackground = blurredBackgroundSwitch.isChecked,
             batteryManagementMode = batteryManagementMode,
-            enableOrientationFiltering = orientationFilteringCheckbox.isChecked,
+            enableOrientationFiltering = orientationFilteringSwitch.isChecked,
             squareDetectionSensitivity = squareDetectionSlider.value,
-            enableFeathering = featheringCheckbox.isChecked
+            enableFeathering = featheringSwitch.isChecked
         )
 
         preferencesManager.saveSettings(newSettings)

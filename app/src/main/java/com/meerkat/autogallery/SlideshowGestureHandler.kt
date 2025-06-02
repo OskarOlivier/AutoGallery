@@ -12,7 +12,7 @@ import kotlin.math.abs
 class SlideshowGestureHandler(
     private val context: Context,
     private val uiManager: SlideshowUIManager,
-    private val photoListManager: PhotoListManager,
+    private val imageListManager: ImageListManager,
     private val onPauseToggle: () -> Unit,
     private val onNavigateToNext: (swipeDirection: SwipeDirection?) -> Unit,
     private val onNavigateToPrevious: (swipeDirection: SwipeDirection?) -> Unit,

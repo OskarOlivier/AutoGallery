@@ -26,6 +26,44 @@
                 <com.google.android.material.textview.MaterialTextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:text="Permissions"
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:layout_marginBottom="12dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/checkPermissionsButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Check and Grant Permissions"
+                    android:layout_marginBottom="8dp"
+                    style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/permissionStatusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Checking permissions..."
+                    android:textAppearance="?attr/textAppearanceBodySmall" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
                     android:text="Folder Selection"
                     android:textAppearance="?attr/textAppearanceTitleMedium"
                     android:layout_marginBottom="12dp" />
@@ -93,6 +131,13 @@
                 </LinearLayout>
 
                 <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Image Analysis"
+                    android:textAppearance="?attr/textAppearanceBodyLarge"
+                    android:layout_marginBottom="8dp" />
+
+                <com.google.android.material.textview.MaterialTextView
                     android:id="@+id/orientationStatsText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -101,159 +146,6 @@
                     android:background="?attr/colorSurfaceVariant"
                     android:padding="12dp"
                     android:textColor="?attr/colorOnSurfaceVariant" />
-
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="4dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <com.google.android.material.textview.MaterialTextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Orientation Filtering"
-                    android:textAppearance="?attr/textAppearanceTitleMedium"
-                    android:layout_marginBottom="12dp" />
-
-                <com.google.android.material.textview.MaterialTextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Show only appropriate images based on device orientation. Square images are always shown in both orientations."
-                    android:textAppearance="?attr/textAppearanceBodyMedium"
-                    android:layout_marginBottom="16dp" />
-
-                <com.google.android.material.checkbox.MaterialCheckBox
-                    android:id="@+id/orientationFilteringCheckbox"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Enable orientation-based filtering"
-                    android:layout_marginBottom="16dp"
-                    android:checked="true" />
-
-                <com.google.android.material.textview.MaterialTextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Square Detection Sensitivity"
-                    android:textAppearance="?attr/textAppearanceBodyLarge"
-                    android:layout_marginBottom="8dp" />
-
-                <com.google.android.material.textview.MaterialTextView
-                    android:id="@+id/squareDetectionText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Sensitivity: 80% (Strict)"
-                    android:textAppearance="?attr/textAppearanceBodyMedium"
-                    android:layout_marginBottom="8dp" />
-
-                <com.google.android.material.slider.Slider
-                    android:id="@+id/squareDetectionSlider"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:valueFrom="0.5"
-                    android:valueTo="1.0"
-                    android:value="0.8"
-                    android:stepSize="0.05"
-                    android:layout_marginBottom="8dp" />
-
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="4dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <com.google.android.material.textview.MaterialTextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Permissions"
-                    android:textAppearance="?attr/textAppearanceTitleMedium"
-                    android:layout_marginBottom="12dp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/checkPermissionsButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Check and Grant Permissions"
-                    android:layout_marginBottom="8dp"
-                    style="@style/Widget.Material3.Button.OutlinedButton" />
-
-                <com.google.android.material.textview.MaterialTextView
-                    android:id="@+id/permissionStatusText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Checking permissions..."
-                    android:textAppearance="?attr/textAppearanceBodySmall" />
-
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="4dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <com.google.android.material.textview.MaterialTextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Battery Management"
-                    android:textAppearance="?attr/textAppearanceTitleMedium"
-                    android:layout_marginBottom="12dp" />
-
-                <com.google.android.material.textview.MaterialTextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Choose when slideshow should start based on battery status"
-                    android:textAppearance="?attr/textAppearanceBodyMedium"
-                    android:layout_marginBottom="16dp" />
-
-                <RadioGroup
-                    android:id="@+id/batteryManagementRadioGroup"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical">
-
-                    <com.google.android.material.radiobutton.MaterialRadioButton
-                        android:id="@+id/chargingOnlyRadio"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Only when charging"
-                        android:layout_marginBottom="8dp"
-                        android:checked="true" />
-
-                    <com.google.android.material.radiobutton.MaterialRadioButton
-                        android:id="@+id/batteryLevelOnlyRadio"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Only when battery >20%" />
-
-                </RadioGroup>
 
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -367,20 +259,134 @@
                     android:stepSize="1"
                     android:layout_marginBottom="16dp" />
 
-                <com.google.android.material.checkbox.MaterialCheckBox
-                    android:id="@+id/blurredBackgroundCheckbox"
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/blurredBackgroundSwitch"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Blurred background for aspect ratio fill"
                     android:layout_marginBottom="8dp" />
 
-                <com.google.android.material.checkbox.MaterialCheckBox
-                    android:id="@+id/featheringCheckbox"
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/featheringSwitch"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Edge feathering effect"
                     android:layout_marginBottom="8dp"
                     android:checked="true" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Orientation Filtering"
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:layout_marginBottom="12dp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Show only appropriate images based on device orientation. Square images are always shown in both orientations."
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:layout_marginBottom="16dp" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/orientationFilteringSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Enable orientation-based filtering"
+                    android:layout_marginBottom="16dp"
+                    android:checked="true" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Square Detection Sensitivity"
+                    android:textAppearance="?attr/textAppearanceBodyLarge"
+                    android:layout_marginBottom="8dp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/squareDetectionText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Sensitivity: 80% (Strict)"
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:layout_marginBottom="8dp" />
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/squareDetectionSlider"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:valueFrom="0.5"
+                    android:valueTo="1.0"
+                    android:value="0.8"
+                    android:stepSize="0.05" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Battery Management"
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:layout_marginBottom="12dp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Choose when slideshow should start based on battery status"
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:layout_marginBottom="16dp" />
+
+                <RadioGroup
+                    android:id="@+id/batteryManagementRadioGroup"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <com.google.android.material.radiobutton.MaterialRadioButton
+                        android:id="@+id/chargingOnlyRadio"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Only when charging"
+                        android:layout_marginBottom="8dp"
+                        android:checked="true" />
+
+                    <com.google.android.material.radiobutton.MaterialRadioButton
+                        android:id="@+id/batteryLevelOnlyRadio"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Only when battery >20%" />
+
+                </RadioGroup>
 
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>

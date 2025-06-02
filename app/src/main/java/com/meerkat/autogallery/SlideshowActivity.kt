@@ -15,8 +15,6 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
 
 class SlideshowActivity : AppCompatActivity() {
 
@@ -34,7 +32,7 @@ class SlideshowActivity : AppCompatActivity() {
     private lateinit var imageLoader: SlideshowImageLoader
     private lateinit var transitionManager: ImageTransitionManager
     private lateinit var zoomManager: SlideshowZoomManager
-    private lateinit var photoListManager: PhotoListManager
+    private lateinit var imageListManager: ImageListManager
 
     // Core properties
     private lateinit var preferencesManager: PreferencesManager
@@ -101,7 +99,7 @@ class SlideshowActivity : AppCompatActivity() {
             initManagers()
 
             // Load basic settings first for battery check
-            photoListManager.loadAndFilterPhotos()
+            imageListManager.loadAndFilterPhotos()
 
             setupActivity()
 
@@ -111,7 +109,7 @@ class SlideshowActivity : AppCompatActivity() {
                 return
             }
 
-            if (photoListManager.getCurrentPhotoList().isEmpty()) {
+            if (imageListManager.getCurrentPhotoList().isEmpty()) {
                 Log.e(TAG, "No photos available for current orientation, finishing activity")
                 finish()
                 return
@@ -153,7 +151,7 @@ class SlideshowActivity : AppCompatActivity() {
         preferencesManager = PreferencesManager(this)
 
         uiManager = SlideshowUIManager(this, pauseIndicator, gestureHints)
-        photoListManager = PhotoListManager(this, preferencesManager)
+        imageListManager = ImageListManager(this, preferencesManager)
         imageLoader = SlideshowImageLoader(this)
         zoomManager = SlideshowZoomManager()
 
@@ -169,7 +167,7 @@ class SlideshowActivity : AppCompatActivity() {
         gestureHandler = SlideshowGestureHandler(
             this,
             uiManager,
-            photoListManager,
+            imageListManager,
             ::onPauseToggle,
             ::onNavigateToNext,
             ::onNavigateToPrevious,
@@ -182,7 +180,7 @@ class SlideshowActivity : AppCompatActivity() {
         gestureHandler.setupGestureDetection(findViewById(R.id.slideshowContainer))
 
         // Apply feathering setting to BorderImageViews
-        val settings = photoListManager.getSettings()
+        val settings = imageListManager.getSettings()
         currentImageView.featheringEnabled = settings.enableFeathering
         nextImageView.featheringEnabled = settings.enableFeathering
     }
@@ -191,12 +189,12 @@ class SlideshowActivity : AppCompatActivity() {
         super.onConfigurationChanged(newConfig)
         Log.d(TAG, "Configuration changed: orientation = ${newConfig.orientation}")
 
-        val oldPhotoCount = photoListManager.getCurrentPhotoList().size
-        photoListManager.handleOrientationChange()
+        val oldPhotoCount = imageListManager.getCurrentPhotoList().size
+        imageListManager.handleOrientationChange()
 
-        Log.d(TAG, "Orientation change: ${oldPhotoCount} -> ${photoListManager.getCurrentPhotoList().size} photos")
+        Log.d(TAG, "Orientation change: ${oldPhotoCount} -> ${imageListManager.getCurrentPhotoList().size} photos")
 
-        if (photoListManager.getCurrentPhotoList().isEmpty()) {
+        if (imageListManager.getCurrentPhotoList().isEmpty()) {
             Log.w(TAG, "No photos available for new orientation, finishing slideshow")
             finish()
             return
@@ -255,7 +253,7 @@ class SlideshowActivity : AppCompatActivity() {
     }
 
     private fun canContinueBasedOnBattery(): Boolean {
-        val settings = photoListManager.getSettings()
+        val settings = imageListManager.getSettings()
         val batteryLevel = getBatteryLevel()
         val isCharging = isDeviceCharging()
 
@@ -272,7 +270,7 @@ class SlideshowActivity : AppCompatActivity() {
     }
 
     private fun showBatteryWarningAndExit() {
-        val settings = photoListManager.getSettings()
+        val settings = imageListManager.getSettings()
         val batteryLevel = getBatteryLevel()
         val isCharging = isDeviceCharging()
 
@@ -297,9 +295,9 @@ class SlideshowActivity : AppCompatActivity() {
     }
 
     private fun startSlideshow() {
-        if (photoListManager.getCurrentPhotoList().isNotEmpty() && isActivityActive && !hasStartedSlideshow) {
+        if (imageListManager.getCurrentPhotoList().isNotEmpty() && isActivityActive && !hasStartedSlideshow) {
             hasStartedSlideshow = true
-            Log.d(TAG, "Starting slideshow with ${photoListManager.getCurrentPhotoList().size} photos")
+            Log.d(TAG, "Starting slideshow with ${imageListManager.getCurrentPhotoList().size} photos")
             showNextImage()
         }
     }
@@ -309,7 +307,7 @@ class SlideshowActivity : AppCompatActivity() {
         swipeDirection: SlideshowGestureHandler.SwipeDirection? = null,
         resumeAutomaticProgression: Boolean = false
     ) {
-        if (photoListManager.getCurrentPhotoList().isEmpty() || !isActivityActive) return
+        if (imageListManager.getCurrentPhotoList().isEmpty() || !isActivityActive) return
 
         if (!canContinueBasedOnBattery()) {
             Log.w(TAG, "Battery conditions no longer met during slideshow, exiting")
@@ -317,16 +315,16 @@ class SlideshowActivity : AppCompatActivity() {
             return
         }
 
-        val currentPhoto = photoListManager.getCurrentPhoto()
-        Log.d(TAG, "Loading image ${photoListManager.getCurrentIndex() + 1}/${photoListManager.getCurrentPhotoList().size}: ${currentPhoto.orientation}")
+        val currentPhoto = imageListManager.getCurrentPhoto()
+        Log.d(TAG, "Loading image ${imageListManager.getCurrentIndex() + 1}/${imageListManager.getCurrentPhotoList().size}: ${currentPhoto.orientation}")
 
         imageLoader.loadImage(
             photoInfo = currentPhoto,
             targetView = nextImageView,
-            backgroundView = if (photoListManager.getSettings().enableBlurredBackground) nextBackgroundImageView else null,
+            backgroundView = if (imageListManager.getSettings().enableBlurredBackground) nextBackgroundImageView else null,
             onImageReady = { drawable ->
-                val settings = photoListManager.getSettings()
-                val photoIndex = photoListManager.getCurrentIndex()
+                val settings = imageListManager.getSettings()
+                val photoIndex = imageListManager.getCurrentIndex()
 
                 nextImageView.featheringEnabled = settings.enableFeathering
 
@@ -347,8 +345,8 @@ class SlideshowActivity : AppCompatActivity() {
                 }
             },
             onError = {
-                val settings = photoListManager.getSettings()
-                val photoIndex = photoListManager.getCurrentIndex()
+                val settings = imageListManager.getSettings()
+                val photoIndex = imageListManager.getCurrentIndex()
 
                 nextImageView.featheringEnabled = settings.enableFeathering
 
@@ -374,7 +372,7 @@ class SlideshowActivity : AppCompatActivity() {
     private fun updateViewReferences(viewReferences: ImageTransitionManager.ViewReferences) {
         Log.d(TAG, "Updating view references to match transition manager")
 
-        val featheringEnabled = photoListManager.getSettings().enableFeathering
+        val featheringEnabled = imageListManager.getSettings().enableFeathering
 
         if (viewReferences.currentImageView is BorderImageView) {
             currentImageView = viewReferences.currentImageView
@@ -398,10 +396,10 @@ class SlideshowActivity : AppCompatActivity() {
         handler.removeCallbacksAndMessages(null)
         handler.postDelayed({
             if (isActivityActive && !gestureHandler.isPaused()) {
-                photoListManager.moveToNext()
+                imageListManager.moveToNext()
                 showNextImage()
             }
-        }, photoListManager.getSettings().slideDuration.toLong())
+        }, imageListManager.getSettings().slideDuration.toLong())
     }
 
     private fun onPauseToggle() {
@@ -411,7 +409,7 @@ class SlideshowActivity : AppCompatActivity() {
         } else {
             if (!transitionManager.isTransitioning()) {
                 scheduleNextImage()
-                zoomManager.resumeZoom(currentImageView, photoListManager.getCurrentIndex(), photoListManager.getSettings())
+                zoomManager.resumeZoom(currentImageView, imageListManager.getCurrentIndex(), imageListManager.getSettings())
             }
         }
     }
@@ -424,7 +422,7 @@ class SlideshowActivity : AppCompatActivity() {
             handler.removeCallbacksAndMessages(null)
         }
 
-        photoListManager.moveToNext()
+        imageListManager.moveToNext()
         showNextImage(
             fastTransition = true,
             swipeDirection = swipeDirection,
@@ -440,7 +438,7 @@ class SlideshowActivity : AppCompatActivity() {
             handler.removeCallbacksAndMessages(null)
         }
 
-        photoListManager.moveToPrevious()
+        imageListManager.moveToPrevious()
         showNextImage(
             fastTransition = true,
             swipeDirection = swipeDirection,

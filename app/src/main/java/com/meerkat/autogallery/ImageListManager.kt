@@ -1,4 +1,4 @@
-// PhotoListManager.kt - Handles photo filtering, sorting, and navigation
+// ImageListManager.kt - Handles photo filtering, sorting, and navigation
 package com.meerkat.autogallery
 
 import android.content.Context
@@ -6,7 +6,7 @@ import android.net.Uri
 import android.provider.MediaStore
 import android.util.Log
 
-class PhotoListManager(
+class ImageListManager(
     private val context: Context,
     private val preferencesManager: PreferencesManager
 ) {
@@ -18,7 +18,7 @@ class PhotoListManager(
     private var currentDeviceOrientation: ImageOrientation = ImageOrientation.LANDSCAPE
 
     companion object {
-        private const val TAG = "PhotoListManager"
+        private const val TAG = "ImageListManager"
     }
 
     fun loadAndFilterPhotos() {
