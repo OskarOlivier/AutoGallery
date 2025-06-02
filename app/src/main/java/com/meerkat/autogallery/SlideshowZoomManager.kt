@@ -1,15 +1,20 @@
-// SlideshowZoomManager.kt - Zoom animation management
+// SlideshowZoomManager.kt - Zoom animation management with duration cap
 package com.meerkat.autogallery
 
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.ImageView
+import kotlin.math.min
 
 class SlideshowZoomManager {
 
     private var currentZoomAnimatorSet: AnimatorSet? = null
     private var isPaused = false
+
+    companion object {
+        private const val MAX_ZOOM_DURATION_MS = 15000L // 15 seconds maximum zoom duration
+    }
 
     fun setInitialScale(imageView: ImageView, photoIndex: Int, settings: GallerySettings) {
         val zoomScale = 1.0f + (settings.zoomAmount / 100f)
@@ -60,7 +65,9 @@ class SlideshowZoomManager {
         val startScale = 1.0f
         val endScale = 1.0f + (settings.zoomAmount / 100f)
 
-        startZoomAnimation(imageView, startScale, endScale, settings.slideDuration.toLong())
+        // Cap zoom duration at 15 seconds maximum
+        val cappedDuration = min(settings.slideDuration.toLong(), MAX_ZOOM_DURATION_MS)
+        startZoomAnimation(imageView, startScale, endScale, cappedDuration)
     }
 
     private fun startSinewaveZoom(imageView: ImageView, photoIndex: Int, settings: GallerySettings) {
@@ -75,7 +82,9 @@ class SlideshowZoomManager {
             Pair(zoomScale, baseScale)
         }
 
-        startZoomAnimation(imageView, startScale, endScale, settings.slideDuration.toLong())
+        // Cap zoom duration at 15 seconds maximum
+        val cappedDuration = min(settings.slideDuration.toLong(), MAX_ZOOM_DURATION_MS)
+        startZoomAnimation(imageView, startScale, endScale, cappedDuration)
     }
 
     private fun startZoomAnimation(imageView: ImageView, startScale: Float, endScale: Float, duration: Long) {
