@@ -25,18 +25,12 @@ class PhotoListManager(
         settings = preferencesManager.loadSettings()
         allPhotoList = settings.photoInfoList.toMutableList()
 
-        // Backward compatibility for old photo format
-        if (allPhotoList.isEmpty() && settings.selectedPhotos.isNotEmpty()) {
-            allPhotoList = settings.selectedPhotos.map { uri ->
-                PhotoInfo(
-                    uri = uri,
-                    orientation = ImageOrientation.SQUARE,
-                    aspectRatio = 1.0f
-                )
-            }.toMutableList()
+        if (allPhotoList.isEmpty()) {
+            Log.w(TAG, "No photos available from folder")
+            return
         }
 
-        Log.d(TAG, "Loaded ${allPhotoList.size} total photos")
+        Log.d(TAG, "Loaded ${allPhotoList.size} photos from folder")
         updateDeviceOrientation()
         filterPhotosByOrientation()
 
@@ -75,8 +69,7 @@ class PhotoListManager(
             allPhotoList.filter { photoInfo ->
                 OrientationUtils.shouldShowImage(
                     photoInfo.orientation,
-                    currentDeviceOrientation,
-                    settings.showSquareImagesInBothOrientations
+                    currentDeviceOrientation
                 )
             }.toMutableList()
         } else {

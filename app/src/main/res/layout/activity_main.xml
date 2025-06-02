@@ -30,7 +30,7 @@
             <com.google.android.material.textview.MaterialTextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Automatically start slideshow when screen turns off"
+                android:text="Folder-Based Gallery"
                 android:textSize="14sp"
                 android:textAppearance="?attr/textAppearanceBodyMedium"
                 android:layout_marginBottom="16dp" />
@@ -70,7 +70,7 @@
             <com.google.android.material.textview.MaterialTextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Photo Selection"
+                android:text="Folder Selection"
                 android:textSize="18sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="8dp" />
@@ -79,7 +79,7 @@
                 android:id="@+id/photoCountText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="No photos selected"
+                android:text="No folder selected"
                 android:textSize="14sp"
                 android:textAppearance="?attr/textAppearanceBodyMedium"
                 android:layout_marginBottom="16dp" />

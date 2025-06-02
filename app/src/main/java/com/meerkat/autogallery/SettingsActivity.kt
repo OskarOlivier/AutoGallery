@@ -4,22 +4,22 @@ package com.meerkat.autogallery
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
+import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.RadioGroup
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.recyclerview.widget.GridLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.checkbox.MaterialCheckBox
+import com.google.android.material.progressindicator.CircularProgressIndicator
 import com.google.android.material.radiobutton.MaterialRadioButton
 import com.google.android.material.slider.Slider
 import com.google.android.material.textview.MaterialTextView
@@ -30,9 +30,13 @@ class SettingsActivity : AppCompatActivity() {
 
     private lateinit var preferencesManager: PreferencesManager
     private lateinit var settings: GallerySettings
+    private lateinit var folderScanner: FolderScanner
 
-    private lateinit var selectPhotosButton: MaterialButton
-    private lateinit var selectedPhotosRecycler: RecyclerView
+    private lateinit var selectFolderButton: MaterialButton
+    private lateinit var refreshFolderButton: MaterialButton
+    private lateinit var folderInfoText: MaterialTextView
+    private lateinit var scanProgressIndicator: CircularProgressIndicator
+    private lateinit var scanProgressText: MaterialTextView
     private lateinit var slideDurationSlider: Slider
     private lateinit var slideDurationText: MaterialTextView
     private lateinit var orderTypeSpinner: Spinner
@@ -45,23 +49,24 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var chargingOnlyRadio: MaterialRadioButton
     private lateinit var batteryLevelOnlyRadio: MaterialRadioButton
     private lateinit var orientationFilteringCheckbox: MaterialCheckBox
-    private lateinit var squareImagesCheckbox: MaterialCheckBox
+    private lateinit var squareDetectionSlider: Slider
+    private lateinit var squareDetectionText: MaterialTextView
     private lateinit var featheringCheckbox: MaterialCheckBox
     private lateinit var checkPermissionsButton: MaterialButton
     private lateinit var permissionStatusText: MaterialTextView
     private lateinit var orientationStatsText: MaterialTextView
 
-    private var photoInfoList = mutableListOf<PhotoInfo>()
-    private lateinit var photoAdapter: SelectedPhotosAdapter
+    private val scanningScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
-    // Coroutine scope for image analysis
-    private val analysisScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-
-    private val multiplePhotoPickerLauncher = registerForActivityResult(
-        ActivityResultContracts.GetMultipleContents()
-    ) { uris: List<Uri> ->
-        if (uris.isNotEmpty()) {
-            analyzeAndAddPhotos(uris)
+    private val folderPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        uri?.let { selectedFolderUri ->
+            contentResolver.takePersistableUriPermission(
+                selectedFolderUri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            scanSelectedFolder(selectedFolderUri)
         }
     }
 
@@ -73,20 +78,28 @@ class SettingsActivity : AppCompatActivity() {
         supportActionBar?.title = "Auto Gallery Settings"
 
         preferencesManager = PreferencesManager(this)
+        folderScanner = FolderScanner(this)
         settings = preferencesManager.loadSettings()
-        photoInfoList = settings.photoInfoList.toMutableList()
 
         initViews()
         setupSpinners()
         loadCurrentSettings()
         setupListeners()
         checkPermissionStatus()
+        updateFolderInfo()
         updateOrientationStats()
+
+        if (settings.folderInfo.uri.isNotEmpty()) {
+            refreshFolder()
+        }
     }
 
     private fun initViews() {
-        selectPhotosButton = findViewById(R.id.selectPhotosButton)
-        selectedPhotosRecycler = findViewById(R.id.selectedPhotosRecycler)
+        selectFolderButton = findViewById(R.id.selectFolderButton)
+        refreshFolderButton = findViewById(R.id.refreshFolderButton)
+        folderInfoText = findViewById(R.id.folderInfoText)
+        scanProgressIndicator = findViewById(R.id.scanProgressIndicator)
+        scanProgressText = findViewById(R.id.scanProgressText)
         slideDurationSlider = findViewById(R.id.slideDurationSlider)
         slideDurationText = findViewById(R.id.slideDurationText)
         orderTypeSpinner = findViewById(R.id.orderTypeSpinner)
@@ -99,34 +112,28 @@ class SettingsActivity : AppCompatActivity() {
         chargingOnlyRadio = findViewById(R.id.chargingOnlyRadio)
         batteryLevelOnlyRadio = findViewById(R.id.batteryLevelOnlyRadio)
         orientationFilteringCheckbox = findViewById(R.id.orientationFilteringCheckbox)
-        squareImagesCheckbox = findViewById(R.id.squareImagesCheckbox)
+        squareDetectionSlider = findViewById(R.id.squareDetectionSlider)
+        squareDetectionText = findViewById(R.id.squareDetectionText)
         featheringCheckbox = findViewById(R.id.featheringCheckbox)
         checkPermissionsButton = findViewById(R.id.checkPermissionsButton)
         permissionStatusText = findViewById(R.id.permissionStatusText)
         orientationStatsText = findViewById(R.id.orientationStatsText)
 
-        // Setup RecyclerView for selected photos
-        photoAdapter = SelectedPhotosAdapter(photoInfoList.map { it.uri }.toMutableList()) { position ->
-            removePhoto(position)
-        }
-        selectedPhotosRecycler.layoutManager = GridLayoutManager(this, 3)
-        selectedPhotosRecycler.adapter = photoAdapter
+        scanProgressIndicator.visibility = View.GONE
+        scanProgressText.visibility = View.GONE
     }
 
     private fun setupSpinners() {
-        // Order type spinner
         val orderTypes = OrderType.values().map { it.displayName }
         val orderAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, orderTypes)
         orderAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         orderTypeSpinner.adapter = orderAdapter
 
-        // Transition type spinner
         val transitionTypes = TransitionType.values().map { it.displayName }
         val transitionAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, transitionTypes)
         transitionAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         transitionTypeSpinner.adapter = transitionAdapter
 
-        // Zoom type spinner
         val zoomTypes = ZoomType.values().map { it.displayName }
         val zoomAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, zoomTypes)
         zoomAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
@@ -146,22 +153,24 @@ class SettingsActivity : AppCompatActivity() {
 
         blurredBackgroundCheckbox.isChecked = settings.enableBlurredBackground
 
-        // Set battery management radio buttons
         when (settings.batteryManagementMode) {
             BatteryManagementMode.CHARGING_ONLY -> chargingOnlyRadio.isChecked = true
             BatteryManagementMode.BATTERY_LEVEL_ONLY -> batteryLevelOnlyRadio.isChecked = true
         }
 
         orientationFilteringCheckbox.isChecked = settings.enableOrientationFiltering
-        squareImagesCheckbox.isChecked = settings.showSquareImagesInBothOrientations
+        squareDetectionSlider.value = settings.squareDetectionSensitivity
+        updateSquareDetectionText(settings.squareDetectionSensitivity)
         featheringCheckbox.isChecked = settings.enableFeathering
-
-        updateSelectedPhotos()
     }
 
     private fun setupListeners() {
-        selectPhotosButton.setOnClickListener {
-            multiplePhotoPickerLauncher.launch("image/*")
+        selectFolderButton.setOnClickListener {
+            showFolderSelectionTip()
+        }
+
+        refreshFolderButton.setOnClickListener {
+            refreshFolder()
         }
 
         slideDurationSlider.addOnChangeListener { _, value, _ ->
@@ -172,9 +181,8 @@ class SettingsActivity : AppCompatActivity() {
             updateZoomAmountText(value.toInt())
         }
 
-        // Save settings when any option changes
-        val saveSettingsListener = {
-            saveCurrentSettings()
+        squareDetectionSlider.addOnChangeListener { _, value, _ ->
+            updateSquareDetectionText(value)
         }
 
         slideDurationSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
@@ -191,16 +199,17 @@ class SettingsActivity : AppCompatActivity() {
             }
         })
 
+        squareDetectionSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                saveCurrentSettings()
+                updateOrientationStats()
+            }
+        })
+
         blurredBackgroundCheckbox.setOnCheckedChangeListener { _, _ -> saveCurrentSettings() }
-
-        // Battery management radio group listener
         batteryManagementRadioGroup.setOnCheckedChangeListener { _, _ -> saveCurrentSettings() }
-
         orientationFilteringCheckbox.setOnCheckedChangeListener { _, _ ->
-            saveCurrentSettings()
-            updateOrientationStats()
-        }
-        squareImagesCheckbox.setOnCheckedChangeListener { _, _ ->
             saveCurrentSettings()
             updateOrientationStats()
         }
@@ -211,81 +220,136 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    private fun analyzeAndAddPhotos(uris: List<Uri>) {
-        Toast.makeText(this, "Analyzing ${uris.size} images...", Toast.LENGTH_SHORT).show()
+    private fun showFolderSelectionTip() {
+        Toast.makeText(
+            this,
+            "Please navigate to your Pictures folder or another folder containing photos",
+            Toast.LENGTH_LONG
+        ).show()
 
-        analysisScope.launch {
-            val newPhotos = mutableListOf<PhotoInfo>()
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            folderPickerLauncher.launch(null)
+        }, 1000)
+    }
 
-            // Analyze images in background thread
-            withContext(Dispatchers.IO) {
-                uris.forEach { uri ->
-                    try {
-                        // Take persistent permission
-                        contentResolver.takePersistableUriPermission(
-                            uri,
-                            Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        )
+    private fun scanSelectedFolder(folderUri: Uri) {
+        scanningScope.launch {
+            try {
+                showScanProgress(true)
 
-                        // Analyze image dimensions
-                        val photoInfo = analyzeImageOrientation(uri)
-                        if (photoInfo != null) {
-                            newPhotos.add(photoInfo)
-                        }
-                    } catch (e: Exception) {
-                        Log.e("SettingsActivity", "Error analyzing image $uri", e)
+                val scanResult = folderScanner.scanFolder(folderUri, settings.squareDetectionSensitivity) { progress ->
+                    lifecycleScope.launch {
+                        updateScanProgress(progress)
                     }
                 }
-            }
 
-            // Update UI on main thread
-            if (newPhotos.isNotEmpty()) {
-                photoInfoList.addAll(newPhotos)
-                updateSelectedPhotos()
+                val newFolderInfo = FolderInfo(
+                    uri = folderUri.toString(),
+                    displayName = scanResult.folderName,
+                    lastScanTime = scanResult.scanTime,
+                    totalImagesFound = scanResult.totalFound,
+                    isLimited = scanResult.isLimited
+                )
+
+                settings = settings.copy(
+                    folderInfo = newFolderInfo,
+                    photoInfoList = scanResult.photoInfoList
+                )
+
                 saveCurrentSettings()
+                updateFolderInfo()
                 updateOrientationStats()
 
+                val message = buildString {
+                    append("Scan complete! ")
+                    append("Found ${scanResult.photoInfoList.size} usable images")
+                    if (scanResult.isLimited) {
+                        append(" (limited to 1000)")
+                    }
+                }
+                Toast.makeText(this@SettingsActivity, message, Toast.LENGTH_LONG).show()
+
+            } catch (e: Exception) {
+                Log.e("SettingsActivity", "Error scanning folder", e)
                 Toast.makeText(
                     this@SettingsActivity,
-                    "Added ${newPhotos.size} images",
-                    Toast.LENGTH_SHORT
+                    "Error scanning folder: ${e.message}",
+                    Toast.LENGTH_LONG
                 ).show()
+            } finally {
+                showScanProgress(false)
             }
         }
     }
 
-    private suspend fun analyzeImageOrientation(uri: Uri): PhotoInfo? {
-        return withContext(Dispatchers.IO) {
-            try {
-                contentResolver.openInputStream(uri)?.use { inputStream ->
-                    val options = BitmapFactory.Options().apply {
-                        inJustDecodeBounds = true
-                    }
-                    BitmapFactory.decodeStream(inputStream, null, options)
+    private fun refreshFolder() {
+        if (settings.folderInfo.uri.isEmpty()) {
+            Toast.makeText(this, "No folder selected", Toast.LENGTH_SHORT).show()
+            return
+        }
 
-                    val width = options.outWidth
-                    val height = options.outHeight
+        val folderUri = Uri.parse(settings.folderInfo.uri)
+        scanSelectedFolder(folderUri)
+    }
 
-                    if (width > 0 && height > 0) {
-                        val aspectRatio = width.toFloat() / height.toFloat()
-                        val orientation = OrientationUtils.classifyImageOrientation(aspectRatio)
+    private fun showScanProgress(show: Boolean) {
+        if (show) {
+            scanProgressIndicator.visibility = View.VISIBLE
+            scanProgressText.visibility = View.VISIBLE
+            selectFolderButton.isEnabled = false
+            refreshFolderButton.isEnabled = false
+        } else {
+            scanProgressIndicator.visibility = View.GONE
+            scanProgressText.visibility = View.GONE
+            selectFolderButton.isEnabled = true
+            refreshFolderButton.isEnabled = true
+        }
+    }
 
-                        Log.d("SettingsActivity", "Image $uri: ${width}x${height}, ratio: $aspectRatio, orientation: $orientation")
+    private fun updateScanProgress(progress: FolderScanner.ScanProgress) {
+        val text = if (progress.total > 0) {
+            "Scanning: ${progress.current}/${progress.total}\n${progress.currentFileName}"
+        } else {
+            "Scanning: ${progress.current} files\n${progress.currentFileName}"
+        }
+        scanProgressText.text = text
+    }
 
-                        PhotoInfo(
-                            uri = uri.toString(),
-                            orientation = orientation,
-                            aspectRatio = aspectRatio
-                        )
-                    } else {
-                        null
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("SettingsActivity", "Error analyzing image $uri", e)
-                null
+    private fun updateFolderInfo() {
+        val folderInfo = settings.folderInfo
+
+        if (folderInfo.uri.isEmpty()) {
+            folderInfoText.text = "No folder selected\n\nPlease select a folder containing your photos"
+            refreshFolderButton.isEnabled = false
+            return
+        }
+
+        val timeText = if (folderInfo.lastScanTime > 0) {
+            val timeAgo = System.currentTimeMillis() - folderInfo.lastScanTime
+            when {
+                timeAgo < 60000 -> "just now"
+                timeAgo < 3600000 -> "${timeAgo / 60000} minutes ago"
+                timeAgo < 86400000 -> "${timeAgo / 3600000} hours ago"
+                else -> "${timeAgo / 86400000} days ago"
+            }
+        } else {
+            "never"
+        }
+
+        val infoText = buildString {
+            append("📁 ${folderInfo.displayName}\n")
+            append("🕒 Last scanned: $timeText\n")
+            append("📸 Images found: ${settings.photoInfoList.size}")
+
+            if (folderInfo.isLimited) {
+                append(" (limited from ${folderInfo.totalImagesFound})")
+            } else if (folderInfo.totalImagesFound != settings.photoInfoList.size) {
+                append(" (${folderInfo.totalImagesFound} total files)")
             }
         }
+
+        folderInfoText.text = infoText
+        refreshFolderButton.isEnabled = true
     }
 
     private fun updateSlideDurationText(seconds: Int) {
@@ -303,22 +367,20 @@ class SettingsActivity : AppCompatActivity() {
         slideDurationText.text = text
     }
 
+    private fun updateSquareDetectionText(sensitivity: Float) {
+        val percentage = (sensitivity * 100).toInt()
+        squareDetectionText.text = "Sensitivity: $percentage% (${if (sensitivity > 0.75f) "Strict" else "Relaxed"})"
+    }
+
     private fun updateZoomAmountText(zoomAmount: Int) {
         zoomAmountText.text = "${100 + zoomAmount}% zoom"
     }
 
-    private fun updateSelectedPhotos() {
-        photoAdapter.updatePhotos(photoInfoList.map { it.uri }.toMutableList())
-        selectPhotosButton.text = if (photoInfoList.isEmpty()) {
-            "Select Photos"
-        } else {
-            "Add More Photos (${photoInfoList.size} selected)"
-        }
-    }
-
     private fun updateOrientationStats() {
+        val photoInfoList = settings.photoInfoList
+
         if (photoInfoList.isEmpty()) {
-            orientationStatsText.text = "No images selected"
+            orientationStatsText.text = "No images scanned"
             return
         }
 
@@ -335,9 +397,8 @@ class SettingsActivity : AppCompatActivity() {
             if (orientationFilteringCheckbox.isChecked) {
                 appendLine()
                 append("✅ Orientation filtering enabled")
-                if (squareImagesCheckbox.isChecked) {
-                    append(" (square images shown in both orientations)")
-                }
+                appendLine()
+                append("⬜ Square images always shown in both orientations")
             } else {
                 appendLine()
                 append("❌ Orientation filtering disabled (all images shown)")
@@ -347,27 +408,14 @@ class SettingsActivity : AppCompatActivity() {
         orientationStatsText.text = stats
     }
 
-    private fun removePhoto(position: Int) {
-        if (position < photoInfoList.size) {
-            photoInfoList.removeAt(position)
-            updateSelectedPhotos()
-            saveCurrentSettings()
-            updateOrientationStats()
-        }
-    }
-
     private fun saveCurrentSettings() {
-        // Get selected battery management mode
         val batteryManagementMode = when (batteryManagementRadioGroup.checkedRadioButtonId) {
             R.id.chargingOnlyRadio -> BatteryManagementMode.CHARGING_ONLY
             R.id.batteryLevelOnlyRadio -> BatteryManagementMode.BATTERY_LEVEL_ONLY
-            else -> BatteryManagementMode.CHARGING_ONLY // Default fallback
+            else -> BatteryManagementMode.CHARGING_ONLY
         }
 
-        val newSettings = GallerySettings(
-            isEnabled = settings.isEnabled,
-            selectedPhotos = photoInfoList.map { it.uri }.toSet(),
-            photoInfoList = photoInfoList,
+        val newSettings = settings.copy(
             slideDuration = (slideDurationSlider.value * 1000).toInt(),
             orderType = OrderType.values()[orderTypeSpinner.selectedItemPosition],
             transitionType = TransitionType.values()[transitionTypeSpinner.selectedItemPosition],
@@ -376,7 +424,7 @@ class SettingsActivity : AppCompatActivity() {
             enableBlurredBackground = blurredBackgroundCheckbox.isChecked,
             batteryManagementMode = batteryManagementMode,
             enableOrientationFiltering = orientationFilteringCheckbox.isChecked,
-            showSquareImagesInBothOrientations = squareImagesCheckbox.isChecked,
+            squareDetectionSensitivity = squareDetectionSlider.value,
             enableFeathering = featheringCheckbox.isChecked
         )
 
@@ -391,7 +439,7 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        analysisScope.cancel()
+        scanningScope.cancel()
         saveCurrentSettings()
     }
 
@@ -405,7 +453,7 @@ class SettingsActivity : AppCompatActivity() {
         val hasNotificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
         } else {
-            true // Not required for older versions
+            true
         }
 
         val hasOverlayPermission = Settings.canDrawOverlays(this)
@@ -422,7 +470,6 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun requestAllPermissions() {
-        // Check overlay permission first
         if (!Settings.canDrawOverlays(this)) {
             val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
             overlayPermissionLauncher.launch(intent)
@@ -431,7 +478,6 @@ class SettingsActivity : AppCompatActivity() {
 
         val permissions = mutableListOf<String>()
 
-        // Storage permissions
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) != PackageManager.PERMISSION_GRANTED) {
                 permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
@@ -442,7 +488,6 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        // Notification permission for Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 permissions.add(Manifest.permission.POST_NOTIFICATIONS)
@@ -474,7 +519,6 @@ class SettingsActivity : AppCompatActivity() {
     ) {
         checkPermissionStatus()
         if (Settings.canDrawOverlays(this)) {
-            // Now check other permissions
             requestAllPermissions()
         } else {
             Toast.makeText(this, "Overlay permission is required for Auto Gallery to work", Toast.LENGTH_LONG).show()

@@ -13,63 +13,49 @@ class PreferencesManager(context: Context) {
     fun saveSettings(settings: GallerySettings) {
         prefs.edit().apply {
             putBoolean("is_enabled", settings.isEnabled)
-
-            // Save old format for backward compatibility
-            putStringSet("selected_photos", settings.selectedPhotos)
-
-            // Save new photo info list as JSON
+            putString("folder_info", folderInfoToJson(settings.folderInfo))
             putString("photo_info_list", photoInfoListToJson(settings.photoInfoList))
-
             putInt("slide_duration", settings.slideDuration)
             putString("order_type", settings.orderType.name)
             putString("transition_type", settings.transitionType.name)
             putString("zoom_type", settings.zoomType.name)
             putInt("zoom_amount", settings.zoomAmount)
             putBoolean("enable_blurred_background", settings.enableBlurredBackground)
-
-            // New battery management setting
             putString("battery_management_mode", settings.batteryManagementMode.name)
-
             putBoolean("enable_orientation_filtering", settings.enableOrientationFiltering)
-            putBoolean("show_square_images_in_both_orientations", settings.showSquareImagesInBothOrientations)
+            putFloat("square_detection_sensitivity", settings.squareDetectionSensitivity)
             putBoolean("enable_feathering", settings.enableFeathering)
-
-            // Clean up old battery settings if they exist
-            remove("enable_on_charging")
-            remove("enable_always")
-
             apply()
         }
     }
 
     fun loadSettings(): GallerySettings {
-        // Load photo info list first (new format)
+        val folderInfoJson = prefs.getString("folder_info", null)
+        val folderInfo = if (folderInfoJson != null) {
+            folderInfoFromJson(folderInfoJson)
+        } else {
+            FolderInfo()
+        }
+
         val photoInfoListJson = prefs.getString("photo_info_list", null)
         val photoInfoList = if (photoInfoListJson != null) {
             photoInfoListFromJson(photoInfoListJson)
         } else {
-            // Fallback to old format for backward compatibility
-            val oldPhotos = prefs.getStringSet("selected_photos", emptySet()) ?: emptySet()
-            // Convert old format to new format (without orientation info)
-            oldPhotos.map { uri ->
-                PhotoInfo(
-                    uri = uri,
-                    orientation = ImageOrientation.SQUARE, // Default to square for old data
-                    aspectRatio = 1.0f
-                )
-            }
+            emptyList()
         }
 
-        // Also maintain the old selectedPhotos set for backward compatibility
-        val selectedPhotos = photoInfoList.map { it.uri }.toSet()
-
-        // Handle battery management mode migration
-        val batteryManagementMode = migrateBatterySettings()
+        val batteryManagementMode = try {
+            BatteryManagementMode.valueOf(
+                prefs.getString("battery_management_mode", BatteryManagementMode.CHARGING_ONLY.name)!!
+            )
+        } catch (e: Exception) {
+            BatteryManagementMode.CHARGING_ONLY
+        }
 
         return GallerySettings(
             isEnabled = prefs.getBoolean("is_enabled", false),
-            selectedPhotos = selectedPhotos,
             photoInfoList = photoInfoList,
+            folderInfo = folderInfo,
             slideDuration = prefs.getInt("slide_duration", 5000),
             orderType = try {
                 OrderType.valueOf(prefs.getString("order_type", OrderType.RANDOM.name)!!)
@@ -90,37 +76,34 @@ class PreferencesManager(context: Context) {
             enableBlurredBackground = prefs.getBoolean("enable_blurred_background", true),
             batteryManagementMode = batteryManagementMode,
             enableOrientationFiltering = prefs.getBoolean("enable_orientation_filtering", true),
-            showSquareImagesInBothOrientations = prefs.getBoolean("show_square_images_in_both_orientations", true),
+            squareDetectionSensitivity = prefs.getFloat("square_detection_sensitivity", 0.8f).coerceIn(0.5f, 1.0f),
             enableFeathering = prefs.getBoolean("enable_feathering", true)
         )
     }
 
-    private fun migrateBatterySettings(): BatteryManagementMode {
-        // Check if new setting already exists
-        val newModeName = prefs.getString("battery_management_mode", null)
-        if (newModeName != null) {
-            return try {
-                BatteryManagementMode.valueOf(newModeName)
-            } catch (e: Exception) {
-                BatteryManagementMode.CHARGING_ONLY
-            }
+    private fun folderInfoToJson(folderInfo: FolderInfo): String {
+        val jsonObject = JSONObject().apply {
+            put("uri", folderInfo.uri)
+            put("displayName", folderInfo.displayName)
+            put("lastScanTime", folderInfo.lastScanTime)
+            put("totalImagesFound", folderInfo.totalImagesFound)
+            put("isLimited", folderInfo.isLimited)
         }
+        return jsonObject.toString()
+    }
 
-        // Migrate from old settings if they exist
-        val hasOldSettings = prefs.contains("enable_on_charging") || prefs.contains("enable_always")
-
-        return if (hasOldSettings) {
-            val enableOnCharging = prefs.getBoolean("enable_on_charging", false)
-            val enableAlways = prefs.getBoolean("enable_always", true)
-
-            when {
-                enableAlways -> BatteryManagementMode.BATTERY_LEVEL_ONLY
-                enableOnCharging -> BatteryManagementMode.CHARGING_ONLY
-                else -> BatteryManagementMode.CHARGING_ONLY // Default fallback
-            }
-        } else {
-            // No old settings, use default
-            BatteryManagementMode.CHARGING_ONLY
+    private fun folderInfoFromJson(json: String): FolderInfo {
+        return try {
+            val jsonObject = JSONObject(json)
+            FolderInfo(
+                uri = jsonObject.optString("uri", ""),
+                displayName = jsonObject.optString("displayName", ""),
+                lastScanTime = jsonObject.optLong("lastScanTime", 0L),
+                totalImagesFound = jsonObject.optInt("totalImagesFound", 0),
+                isLimited = jsonObject.optBoolean("isLimited", false)
+            )
+        } catch (e: Exception) {
+            FolderInfo()
         }
     }
 

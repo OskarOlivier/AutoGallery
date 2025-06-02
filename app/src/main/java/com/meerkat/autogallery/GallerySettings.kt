@@ -18,10 +18,18 @@ enum class BatteryManagementMode(val displayName: String) {
     BATTERY_LEVEL_ONLY("Only when battery >20%")
 }
 
+data class FolderInfo(
+    val uri: String = "",
+    val displayName: String = "",
+    val lastScanTime: Long = 0L,
+    val totalImagesFound: Int = 0,
+    val isLimited: Boolean = false
+)
+
 data class GallerySettings(
     val isEnabled: Boolean = false,
-    val selectedPhotos: Set<String> = emptySet(), // Keep for backward compatibility
-    val photoInfoList: List<PhotoInfo> = emptyList(), // New orientation-aware storage
+    val photoInfoList: List<PhotoInfo> = emptyList(),
+    val folderInfo: FolderInfo = FolderInfo(),
     val slideDuration: Int = 5000, // milliseconds
     val orderType: OrderType = OrderType.RANDOM,
     val transitionType: TransitionType = TransitionType.FADE,
@@ -29,9 +37,9 @@ data class GallerySettings(
     val zoomAmount: Int = 3, // zoom percentage (0-5, representing 100%-105%)
     val enableBlurredBackground: Boolean = true,
     val batteryManagementMode: BatteryManagementMode = BatteryManagementMode.CHARGING_ONLY,
-    val enableOrientationFiltering: Boolean = true, // New setting to enable/disable orientation filtering
-    val showSquareImagesInBothOrientations: Boolean = true, // Whether to show square images in both orientations
-    val enableFeathering: Boolean = true // Enable/disable edge feathering effect
+    val enableOrientationFiltering: Boolean = true,
+    val squareDetectionSensitivity: Float = 0.8f, // 0.5 = very sensitive (few squares), 1.0 = less sensitive (more squares)
+    val enableFeathering: Boolean = true
 )
 
 enum class OrderType(val displayName: String) {
@@ -56,10 +64,19 @@ enum class ZoomType(val displayName: String) {
 
 // Helper functions for orientation detection
 object OrientationUtils {
-    fun classifyImageOrientation(aspectRatio: Float): ImageOrientation {
+    fun classifyImageOrientation(aspectRatio: Float, squareDetectionSensitivity: Float = 0.8f): ImageOrientation {
+        // Calculate square detection range based on sensitivity
+        // sensitivity 1.0 = strict (narrow range, fewer squares): ~0.9-1.1
+        // sensitivity 0.5 = relaxed (wide range, more squares): ~0.75-1.33
+        val baseRange = 0.2f // Base range around 1.0
+        val sensitivityRange = baseRange * (2.0f - squareDetectionSensitivity) // Invert sensitivity
+
+        val lowerThreshold = 1.0f - sensitivityRange
+        val upperThreshold = 1.0f + sensitivityRange
+
         return when {
-            aspectRatio > 1.2f -> ImageOrientation.LANDSCAPE
-            aspectRatio < 0.8f -> ImageOrientation.PORTRAIT
+            aspectRatio > upperThreshold -> ImageOrientation.LANDSCAPE
+            aspectRatio < lowerThreshold -> ImageOrientation.PORTRAIT
             else -> ImageOrientation.SQUARE
         }
     }
@@ -69,9 +86,9 @@ object OrientationUtils {
         return if (deviceAspectRatio > 1.0f) ImageOrientation.LANDSCAPE else ImageOrientation.PORTRAIT
     }
 
-    fun shouldShowImage(imageOrientation: ImageOrientation, deviceOrientation: ImageOrientation, showSquareInBoth: Boolean): Boolean {
+    fun shouldShowImage(imageOrientation: ImageOrientation, deviceOrientation: ImageOrientation): Boolean {
         return when (imageOrientation) {
-            ImageOrientation.SQUARE -> showSquareInBoth // Show square images in both orientations if enabled
+            ImageOrientation.SQUARE -> true // Always show square images
             ImageOrientation.LANDSCAPE -> deviceOrientation == ImageOrientation.LANDSCAPE
             ImageOrientation.PORTRAIT -> deviceOrientation == ImageOrientation.PORTRAIT
         }

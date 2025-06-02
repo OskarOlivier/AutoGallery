@@ -26,30 +26,77 @@
                 <com.google.android.material.textview.MaterialTextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Photo Selection"
+                    android:text="Folder Selection"
                     android:textAppearance="?attr/textAppearanceTitleMedium"
                     android:layout_marginBottom="12dp" />
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/selectPhotosButton"
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Select Photos"
-                    android:layout_marginBottom="12dp"
-                    style="@style/Widget.Material3.Button.OutlinedButton" />
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="12dp">
 
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/selectedPhotosRecycler"
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/selectFolderButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Select Folder"
+                        android:layout_marginEnd="8dp"
+                        style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/refreshFolderButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Refresh"
+                        android:layout_marginStart="8dp"
+                        style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                </LinearLayout>
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/folderInfoText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:minHeight="100dp"
+                    android:text="No folder selected"
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:background="?attr/colorSurfaceVariant"
+                    android:padding="12dp"
                     android:layout_marginBottom="12dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="12dp">
+
+                    <com.google.android.material.progressindicator.CircularProgressIndicator
+                        android:id="@+id/scanProgressIndicator"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_marginEnd="12dp"
+                        android:indeterminate="true"
+                        android:visibility="gone" />
+
+                    <com.google.android.material.textview.MaterialTextView
+                        android:id="@+id/scanProgressText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Scanning folder..."
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:visibility="gone" />
+
+                </LinearLayout>
 
                 <com.google.android.material.textview.MaterialTextView
                     android:id="@+id/orientationStatsText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="No images selected"
+                    android:text="No images scanned"
                     android:textAppearance="?attr/textAppearanceBodySmall"
                     android:background="?attr/colorSurfaceVariant"
                     android:padding="12dp"
@@ -81,7 +128,7 @@
                 <com.google.android.material.textview.MaterialTextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Show only appropriate images based on device orientation"
+                    android:text="Show only appropriate images based on device orientation. Square images are always shown in both orientations."
                     android:textAppearance="?attr/textAppearanceBodyMedium"
                     android:layout_marginBottom="16dp" />
 
@@ -90,15 +137,33 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Enable orientation-based filtering"
-                    android:layout_marginBottom="8dp"
+                    android:layout_marginBottom="16dp"
                     android:checked="true" />
 
-                <com.google.android.material.checkbox.MaterialCheckBox
-                    android:id="@+id/squareImagesCheckbox"
+                <com.google.android.material.textview.MaterialTextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Show square images in both orientations"
-                    android:checked="true" />
+                    android:text="Square Detection Sensitivity"
+                    android:textAppearance="?attr/textAppearanceBodyLarge"
+                    android:layout_marginBottom="8dp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/squareDetectionText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Sensitivity: 80% (Strict)"
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:layout_marginBottom="8dp" />
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/squareDetectionSlider"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:valueFrom="0.5"
+                    android:valueTo="1.0"
+                    android:value="0.8"
+                    android:stepSize="0.05"
+                    android:layout_marginBottom="8dp" />
 
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>

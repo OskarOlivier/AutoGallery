@@ -15,6 +15,8 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 class SlideshowActivity : AppCompatActivity() {
 
@@ -47,7 +49,7 @@ class SlideshowActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "SlideshowActivity"
-        private const val MIN_BATTERY_LEVEL = 20 // Same as service
+        private const val MIN_BATTERY_LEVEL = 20
     }
 
     private val screenStateReceiver = object : BroadcastReceiver() {
@@ -74,14 +76,12 @@ class SlideshowActivity : AppCompatActivity() {
         }
     }
 
-    // Battery monitoring receiver with new battery management logic
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == Intent.ACTION_BATTERY_CHANGED) {
                 val batteryLevel = getBatteryLevel()
                 Log.d(TAG, "Battery level: $batteryLevel%")
 
-                // Check if slideshow should continue based on new battery management
                 if (!canContinueBasedOnBattery()) {
                     Log.d(TAG, "Battery conditions no longer met, exiting slideshow")
                     showBatteryWarningAndExit()
@@ -99,9 +99,12 @@ class SlideshowActivity : AppCompatActivity() {
             setContentView(R.layout.activity_slideshow)
             initViews()
             initManagers()
+
+            // Load basic settings first for battery check
+            photoListManager.loadAndFilterPhotos()
+
             setupActivity()
 
-            // Check battery conditions before starting with new battery management
             if (!canContinueBasedOnBattery()) {
                 Log.w(TAG, "Battery conditions not met to start slideshow")
                 showBatteryWarningAndExit()
@@ -177,7 +180,6 @@ class SlideshowActivity : AppCompatActivity() {
     private fun setupActivity() {
         uiManager.setupFullscreen()
         gestureHandler.setupGestureDetection(findViewById(R.id.slideshowContainer))
-        photoListManager.loadAndFilterPhotos()
 
         // Apply feathering setting to BorderImageViews
         val settings = photoListManager.getSettings()
@@ -238,7 +240,7 @@ class SlideshowActivity : AppCompatActivity() {
             batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
         } catch (e: Exception) {
             Log.e(TAG, "Error getting battery level", e)
-            100 // Assume full battery if we can't get the level
+            100
         }
     }
 
@@ -291,7 +293,7 @@ class SlideshowActivity : AppCompatActivity() {
 
         handler.postDelayed({
             finish()
-        }, 2000) // Give time to read the message
+        }, 2000)
     }
 
     private fun startSlideshow() {
@@ -309,7 +311,6 @@ class SlideshowActivity : AppCompatActivity() {
     ) {
         if (photoListManager.getCurrentPhotoList().isEmpty() || !isActivityActive) return
 
-        // Additional battery check before loading next image
         if (!canContinueBasedOnBattery()) {
             Log.w(TAG, "Battery conditions no longer met during slideshow, exiting")
             showBatteryWarningAndExit()
@@ -327,7 +328,6 @@ class SlideshowActivity : AppCompatActivity() {
                 val settings = photoListManager.getSettings()
                 val photoIndex = photoListManager.getCurrentIndex()
 
-                // Ensure feathering setting is applied to the image view that will become current
                 nextImageView.featheringEnabled = settings.enableFeathering
 
                 zoomManager.setInitialScale(nextImageView, photoIndex, settings)
@@ -341,9 +341,6 @@ class SlideshowActivity : AppCompatActivity() {
                 ) { updatedViewReferences ->
                     updateViewReferences(updatedViewReferences)
 
-                    // Resume automatic progression if:
-                    // 1. Normal transition (!fastTransition) OR fast transition that should resume (resumeAutomaticProgression)
-                    // 2. AND slideshow is not paused
                     if ((!fastTransition || resumeAutomaticProgression) && !gestureHandler.isPaused()) {
                         scheduleNextImage()
                     }
@@ -353,7 +350,6 @@ class SlideshowActivity : AppCompatActivity() {
                 val settings = photoListManager.getSettings()
                 val photoIndex = photoListManager.getCurrentIndex()
 
-                // Ensure feathering setting is applied even on error
                 nextImageView.featheringEnabled = settings.enableFeathering
 
                 zoomManager.setInitialScale(nextImageView, photoIndex, settings)
@@ -378,7 +374,6 @@ class SlideshowActivity : AppCompatActivity() {
     private fun updateViewReferences(viewReferences: ImageTransitionManager.ViewReferences) {
         Log.d(TAG, "Updating view references to match transition manager")
 
-        // Update view references and ensure feathering settings are maintained
         val featheringEnabled = photoListManager.getSettings().enableFeathering
 
         if (viewReferences.currentImageView is BorderImageView) {
@@ -409,7 +404,6 @@ class SlideshowActivity : AppCompatActivity() {
         }, photoListManager.getSettings().slideDuration.toLong())
     }
 
-    // Updated gesture handler callbacks with swipe direction support
     private fun onPauseToggle() {
         if (gestureHandler.isPaused()) {
             handler.removeCallbacksAndMessages(null)

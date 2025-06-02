@@ -26,7 +26,7 @@ class ScreenStateService : Service() {
         private const val TAG = "ScreenStateService"
         private const val CHANNEL_ID = "auto_gallery_service"
         private const val NOTIFICATION_ID = 1001
-        private const val MIN_BATTERY_LEVEL = 20 // Minimum battery level for BATTERY_LEVEL_ONLY mode
+        private const val MIN_BATTERY_LEVEL = 20
     }
 
     private val screenStateReceiver = object : BroadcastReceiver() {
@@ -47,15 +47,11 @@ class ScreenStateService : Service() {
         }
     }
 
-    // Battery level receiver to monitor battery changes
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == Intent.ACTION_BATTERY_CHANGED) {
                 val batteryLevel = getBatteryLevel()
                 Log.d(TAG, "Battery level changed: $batteryLevel%")
-
-                // If slideshow is running and battery is too low, we'll let SlideshowActivity handle it
-                // This receiver mainly logs battery changes for debugging
             }
         }
     }
@@ -110,12 +106,11 @@ class ScreenStateService : Service() {
         }
 
         val settings = preferencesManager.loadSettings()
-        if (!settings.isEnabled || settings.selectedPhotos.isEmpty()) {
-            Log.d(TAG, "Not starting slideshow - disabled or no photos selected")
+        if (!settings.isEnabled || settings.folderInfo.uri.isEmpty() || settings.photoInfoList.isEmpty()) {
+            Log.d(TAG, "Not starting slideshow - disabled, no folder selected, or no photos in folder")
             return
         }
 
-        // Check battery conditions based on the new battery management mode
         val canStartBasedOnBattery = checkBatteryConditions(settings.batteryManagementMode)
         if (!canStartBasedOnBattery) {
             Log.d(TAG, "Not starting slideshow - battery conditions not met")
@@ -123,7 +118,6 @@ class ScreenStateService : Service() {
         }
 
         Log.d(TAG, "Starting slideshow with delay (battery management: ${settings.batteryManagementMode})")
-        // Start slideshow with a shorter delay since we made the activity more robust
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             if (isScreenOff && !slideshowStarted) {
                 Log.d(TAG, "Actually starting slideshow now")
@@ -131,7 +125,7 @@ class ScreenStateService : Service() {
             } else {
                 Log.d(TAG, "Slideshow start cancelled - screen state changed")
             }
-        }, 1500) // Reduced delay to 1.5 seconds
+        }, 1500)
     }
 
     private fun checkBatteryConditions(batteryManagementMode: BatteryManagementMode): Boolean {
@@ -158,7 +152,7 @@ class ScreenStateService : Service() {
             batteryLevel
         } catch (e: Exception) {
             Log.e(TAG, "Error getting battery level", e)
-            100 // Assume full battery if we can't get the level
+            100
         }
     }
 
@@ -178,14 +172,12 @@ class ScreenStateService : Service() {
         try {
             slideshowStarted = true
             val intent = Intent(this, SlideshowActivity::class.java).apply {
-                // Use flags that ensure the slideshow starts cleanly without showing MainActivity
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                         Intent.FLAG_ACTIVITY_CLEAR_TASK or
                         Intent.FLAG_ACTIVITY_NO_HISTORY or
                         Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS or
                         Intent.FLAG_ACTIVITY_NO_ANIMATION
 
-                // Add extra to indicate this is started from service
                 putExtra("STARTED_FROM_SERVICE", true)
             }
             startActivity(intent)
@@ -220,7 +212,6 @@ class ScreenStateService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Get current settings for notification text
         val settings = preferencesManager.loadSettings()
         val batteryLevel = getBatteryLevel()
         val isCharging = isDeviceCharging()
@@ -242,9 +233,19 @@ class ScreenStateService : Service() {
             }
         }
 
+        val folderStatus = if (settings.folderInfo.uri.isNotEmpty()) {
+            if (settings.photoInfoList.isNotEmpty()) {
+                "${settings.photoInfoList.size} photos from ${settings.folderInfo.displayName}"
+            } else {
+                "No photos in ${settings.folderInfo.displayName}"
+            }
+        } else {
+            "No folder selected"
+        }
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Auto Gallery")
-            .setContentText("Monitoring screen state • $batteryStatus")
+            .setContentText("$folderStatus • $batteryStatus")
             .setSmallIcon(R.drawable.ic_photo_library)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
@@ -263,7 +264,6 @@ class ScreenStateService : Service() {
         }
     }
 
-    // Utility methods for other classes to use
     fun getCurrentBatteryLevel(): Int = getBatteryLevel()
     fun isBatterySufficient(): Boolean = getBatteryLevel() > MIN_BATTERY_LEVEL
 }

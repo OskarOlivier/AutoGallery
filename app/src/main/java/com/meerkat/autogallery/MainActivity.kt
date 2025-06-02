@@ -36,7 +36,6 @@ class MainActivity : AppCompatActivity() {
         private const val MIN_BATTERY_LEVEL = 20
     }
 
-    // Battery receiver to update UI when battery changes
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == Intent.ACTION_BATTERY_CHANGED) {
@@ -168,15 +167,16 @@ class MainActivity : AppCompatActivity() {
             testButton.setOnClickListener {
                 try {
                     val settings = preferencesManager.loadSettings()
-                    if (settings.photoInfoList.isNotEmpty() || settings.selectedPhotos.isNotEmpty()) {
-                        // Check battery conditions before starting test slideshow
+                    if (settings.photoInfoList.isNotEmpty()) {
                         if (!canStartSlideshowBasedOnBattery(settings.batteryManagementMode)) {
                             showBatteryError(settings.batteryManagementMode)
                             return@setOnClickListener
                         }
                         startActivity(Intent(this, SlideshowActivity::class.java))
+                    } else if (settings.folderInfo.uri.isNotEmpty()) {
+                        Toast.makeText(this, "No photos found in selected folder. Try refreshing in Settings.", Toast.LENGTH_LONG).show()
                     } else {
-                        Toast.makeText(this, "Please select photos in Settings first", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Please select a folder in Settings first", Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
                     Log.e("MainActivity", "Error starting slideshow", e)
@@ -194,7 +194,7 @@ class MainActivity : AppCompatActivity() {
             batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
         } catch (e: Exception) {
             Log.e("MainActivity", "Error getting battery level", e)
-            100 // Assume full battery if we can't get the level
+            100
         }
     }
 
@@ -269,57 +269,75 @@ class MainActivity : AppCompatActivity() {
             val settings = preferencesManager.loadSettings()
             enableSwitch.isChecked = settings.isEnabled
 
-            // Get photo information
-            val photoCount = maxOf(settings.photoInfoList.size, settings.selectedPhotos.size)
+            val photoCount = settings.photoInfoList.size
+            val folderInfo = settings.folderInfo
 
-            // Create detailed photo count text with orientation information
-            val photoCountDetail = if (photoCount > 0) {
+            val photoCountDetail = if (folderInfo.uri.isNotEmpty() && photoCount > 0) {
                 buildString {
-                    append("$photoCount photos selected")
+                    append("📁 ${folderInfo.displayName}")
+                    appendLine()
+                    append("$photoCount photos scanned")
 
-                    // Add orientation breakdown if available
-                    if (settings.photoInfoList.isNotEmpty()) {
-                        val landscapeCount = settings.photoInfoList.count { it.orientation == ImageOrientation.LANDSCAPE }
-                        val portraitCount = settings.photoInfoList.count { it.orientation == ImageOrientation.PORTRAIT }
-                        val squareCount = settings.photoInfoList.count { it.orientation == ImageOrientation.SQUARE }
+                    val landscapeCount = settings.photoInfoList.count { it.orientation == ImageOrientation.LANDSCAPE }
+                    val portraitCount = settings.photoInfoList.count { it.orientation == ImageOrientation.PORTRAIT }
+                    val squareCount = settings.photoInfoList.count { it.orientation == ImageOrientation.SQUARE }
 
-                        appendLine()
+                    appendLine()
 
-                        if (settings.enableOrientationFiltering) {
-                            // Get current device orientation
-                            val currentOrientation = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                                ImageOrientation.LANDSCAPE
-                            } else {
-                                ImageOrientation.PORTRAIT
-                            }
-
-                            // Calculate available photos for current orientation
-                            val availableForCurrentOrientation = settings.photoInfoList.count { photoInfo ->
-                                OrientationUtils.shouldShowImage(
-                                    photoInfo.orientation,
-                                    currentOrientation,
-                                    settings.showSquareImagesInBothOrientations
-                                )
-                            }
-
-                            val orientationName = if (currentOrientation == ImageOrientation.LANDSCAPE) "landscape" else "portrait"
-                            append("📱 $availableForCurrentOrientation available in $orientationName mode")
-                            appendLine()
-                            append("🏞️ $landscapeCount landscape • 📱 $portraitCount portrait • ⬜ $squareCount square")
+                    if (settings.enableOrientationFiltering) {
+                        val currentOrientation = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                            ImageOrientation.LANDSCAPE
                         } else {
-                            append("🏞️ $landscapeCount landscape • 📱 $portraitCount portrait • ⬜ $squareCount square")
-                            appendLine()
-                            append("(All photos will be shown - orientation filtering disabled)")
+                            ImageOrientation.PORTRAIT
                         }
+
+                        val availableForCurrentOrientation = settings.photoInfoList.count { photoInfo ->
+                            OrientationUtils.shouldShowImage(
+                                photoInfo.orientation,
+                                currentOrientation
+                            )
+                        }
+
+                        val orientationName = if (currentOrientation == ImageOrientation.LANDSCAPE) "landscape" else "portrait"
+                        append("📱 $availableForCurrentOrientation available in $orientationName mode")
+                        appendLine()
+                        append("🏞️ $landscapeCount landscape • 📱 $portraitCount portrait • ⬜ $squareCount square")
+                    } else {
+                        append("🏞️ $landscapeCount landscape • 📱 $portraitCount portrait • ⬜ $squareCount square")
+                        appendLine()
+                        append("(All photos will be shown - orientation filtering disabled)")
                     }
 
-                    // Add battery status
+                    if (folderInfo.lastScanTime > 0) {
+                        val timeAgo = System.currentTimeMillis() - folderInfo.lastScanTime
+                        val timeText = when {
+                            timeAgo < 60000 -> "just now"
+                            timeAgo < 3600000 -> "${timeAgo / 60000} minutes ago"
+                            timeAgo < 86400000 -> "${timeAgo / 3600000} hours ago"
+                            else -> "${timeAgo / 86400000} days ago"
+                        }
+                        appendLine()
+                        append("🕒 Last scanned: $timeText")
+                    }
+
+                    appendLine()
+                    append(getBatteryStatusText(settings))
+                }
+            } else if (folderInfo.uri.isNotEmpty()) {
+                buildString {
+                    append("📁 ${folderInfo.displayName}")
+                    appendLine()
+                    append("No photos found in folder")
+                    appendLine()
+                    append("Use Settings → Refresh to rescan")
                     appendLine()
                     append(getBatteryStatusText(settings))
                 }
             } else {
                 buildString {
-                    append("No photos selected")
+                    append("No folder selected")
+                    appendLine()
+                    append("Please select a folder in Settings")
                     appendLine()
                     append(getBatteryStatusText(settings))
                 }
@@ -329,6 +347,7 @@ class MainActivity : AppCompatActivity() {
 
             statusText.text = when {
                 !settings.isEnabled -> "Auto Gallery is disabled"
+                folderInfo.uri.isEmpty() -> "Please select a folder in Settings"
                 !canStartSlideshowBasedOnBattery(settings.batteryManagementMode) -> {
                     when (settings.batteryManagementMode) {
                         BatteryManagementMode.CHARGING_ONLY -> "Waiting for device to be plugged in"
@@ -338,7 +357,7 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 }
-                photoCount == 0 -> "Please select photos in Settings"
+                photoCount == 0 -> "No photos found in selected folder"
                 settings.enableOrientationFiltering -> {
                     val currentOrientation = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
                         ImageOrientation.LANDSCAPE
@@ -346,16 +365,11 @@ class MainActivity : AppCompatActivity() {
                         ImageOrientation.PORTRAIT
                     }
 
-                    val availableForCurrentOrientation = if (settings.photoInfoList.isNotEmpty()) {
-                        settings.photoInfoList.count { photoInfo ->
-                            OrientationUtils.shouldShowImage(
-                                photoInfo.orientation,
-                                currentOrientation,
-                                settings.showSquareImagesInBothOrientations
-                            )
-                        }
-                    } else {
-                        photoCount // Fallback for backward compatibility
+                    val availableForCurrentOrientation = settings.photoInfoList.count { photoInfo ->
+                        OrientationUtils.shouldShowImage(
+                            photoInfo.orientation,
+                            currentOrientation
+                        )
                     }
 
                     if (availableForCurrentOrientation > 0) {
@@ -374,13 +388,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        // Update UI when orientation changes to show correct photo counts
         updateUI()
     }
 
     private fun checkPermissionsAndSetup() {
         try {
-            // Check overlay permission first
             if (!Settings.canDrawOverlays(this)) {
                 val intent = Intent(
                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -401,7 +413,6 @@ class MainActivity : AppCompatActivity() {
         try {
             val permissions = mutableListOf<String>()
 
-            // Storage permissions
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES)
                     != PackageManager.PERMISSION_GRANTED) {
@@ -414,7 +425,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            // Notification permission for Android 13+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) {
@@ -435,7 +445,6 @@ class MainActivity : AppCompatActivity() {
     private fun setupService() {
         try {
             updateUI()
-            // Service will be started when user enables the switch
         } catch (e: Exception) {
             Log.e("MainActivity", "Error setting up service", e)
         }
