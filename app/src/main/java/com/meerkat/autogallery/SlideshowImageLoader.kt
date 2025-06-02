@@ -1,4 +1,4 @@
-// SlideshowImageLoader.kt - Handles image loading and processing
+// SlideshowImageLoader.kt - Updated with 10px edge buffer for fade effect
 package com.meerkat.autogallery
 
 import android.content.Context
@@ -121,10 +121,17 @@ class SlideshowImageLoader(private val context: Context) {
         val imageAspectRatio = imageWidth.toFloat() / imageHeight.toFloat()
         val screenAspectRatio = screenWidth.toFloat() / screenHeight.toFloat()
 
+        // Buffer to ensure image extends beyond screen edges for future fade effect
+        val edgeBuffer = 20 // 10px on each edge that touches the screen border
+
         val scaleFactor = if (imageAspectRatio > screenAspectRatio) {
-            screenHeight.toFloat() / imageHeight.toFloat()
+            // Image is wider relative to height - will touch top/bottom edges
+            // Add buffer to height to ensure image extends beyond top/bottom by 10px each
+            (screenHeight + edgeBuffer).toFloat() / imageHeight.toFloat()
         } else {
-            screenWidth.toFloat() / imageWidth.toFloat()
+            // Image is taller relative to width - will touch left/right edges
+            // Add buffer to width to ensure image extends beyond left/right by 10px each
+            (screenWidth + edgeBuffer).toFloat() / imageWidth.toFloat()
         }
 
         val finalScale = max(scaleFactor, 1.0f)
@@ -134,12 +141,13 @@ class SlideshowImageLoader(private val context: Context) {
             return drawable
         }
 
-        Log.d(TAG, "Scaling image ${imageWidth}x${imageHeight} by factor ${finalScale}")
-
-        val bitmap = drawableToBitmap(drawable)
         val scaledWidth = (imageWidth * finalScale).toInt()
         val scaledHeight = (imageHeight * finalScale).toInt()
 
+        Log.d(TAG, "Scaling image ${imageWidth}x${imageHeight} -> ${scaledWidth}x${scaledHeight} " +
+                "(factor: ${String.format("%.2f", finalScale)}, includes ${edgeBuffer}px edge buffer)")
+
+        val bitmap = drawableToBitmap(drawable)
         val scaledBitmap = Bitmap.createScaledBitmap(bitmap, scaledWidth, scaledHeight, true)
         return BitmapDrawable(context.resources, scaledBitmap)
     }

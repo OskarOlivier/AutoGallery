@@ -1,4 +1,4 @@
-// ImageTransitionManager.kt - Enhanced with gesture-driven transitions
+// ImageTransitionManager.kt - Updated for BorderImageView compatibility
 package com.meerkat.autogallery
 
 import android.animation.AnimatorSet
@@ -118,7 +118,7 @@ class ImageTransitionManager(
         photoIndex: Int,
         onComplete: (ViewReferences) -> Unit
     ) {
-        Log.d(TAG, "Showing first image - no transition needed")
+        Log.d(TAG, "Showing first image with BorderImageView fade effect - no transition needed")
         swapImageViews()
         if (settings.enableBlurredBackground) {
             swapBackgroundViews()
@@ -171,7 +171,7 @@ class ImageTransitionManager(
         photoIndex: Int,
         duration: Long
     ): AnimatorSet {
-        Log.d(TAG, "Creating slide transition: $direction, duration: $duration")
+        Log.d(TAG, "Creating slide transition with BorderImageView: $direction, duration: $duration")
 
         val slideDistance = when (direction) {
             SlideDirection.LEFT, SlideDirection.RIGHT -> screenWidth.toFloat()
@@ -253,7 +253,7 @@ class ImageTransitionManager(
     }
 
     private fun resetPositionsForSlide() {
-        Log.d(TAG, "Resetting positions for slide (preserving zoom)")
+        Log.d(TAG, "Resetting positions for slide (preserving zoom and BorderImageView fade effect)")
         listOf(currentImageView, nextImageView, currentBackgroundImageView, nextBackgroundImageView).forEach { view ->
             view.translationX = 0f
             view.translationY = 0f
@@ -325,7 +325,7 @@ class ImageTransitionManager(
     }
 
     private fun completeSlideTransition(settings: GallerySettings) {
-        Log.d(TAG, "Completing slide transition")
+        Log.d(TAG, "Completing slide transition with BorderImageView fade effect")
 
         swapImageViews()
         if (settings.enableBlurredBackground) {

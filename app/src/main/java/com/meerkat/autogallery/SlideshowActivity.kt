@@ -1,4 +1,4 @@
-// SlideshowActivity.kt - Updated with gesture-driven transitions
+// SlideshowActivity.kt - Updated with battery management
 package com.meerkat.autogallery
 
 import android.content.BroadcastReceiver
@@ -6,12 +6,14 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
+import android.os.BatteryManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
 class SlideshowActivity : AppCompatActivity() {
@@ -39,11 +41,13 @@ class SlideshowActivity : AppCompatActivity() {
     private var startTime = 0L
     private var shouldIgnoreScreenOn = true
     private var isReceiverRegistered = false
+    private var isBatteryReceiverRegistered = false
 
     private val handler = Handler(Looper.getMainLooper())
 
     companion object {
         private const val TAG = "SlideshowActivity"
+        private const val MIN_BATTERY_LEVEL = 20 // Same as service
     }
 
     private val screenStateReceiver = object : BroadcastReceiver() {
@@ -70,6 +74,21 @@ class SlideshowActivity : AppCompatActivity() {
         }
     }
 
+    // Battery monitoring receiver
+    private val batteryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_BATTERY_CHANGED) {
+                val batteryLevel = getBatteryLevel()
+                Log.d(TAG, "Battery level: $batteryLevel%")
+
+                if (batteryLevel <= MIN_BATTERY_LEVEL) {
+                    Log.d(TAG, "Battery too low ($batteryLevel%), exiting slideshow")
+                    showBatteryWarningAndExit()
+                }
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         startTime = System.currentTimeMillis()
@@ -81,6 +100,13 @@ class SlideshowActivity : AppCompatActivity() {
             initManagers()
             setupActivity()
 
+            // Check battery level before starting
+            if (!isBatteryLevelSufficient()) {
+                Log.w(TAG, "Battery too low to start slideshow")
+                showBatteryWarningAndExit()
+                return
+            }
+
             if (photoListManager.getCurrentPhotoList().isEmpty()) {
                 Log.e(TAG, "No photos available for current orientation, finishing activity")
                 finish()
@@ -89,6 +115,7 @@ class SlideshowActivity : AppCompatActivity() {
 
             isActivityActive = true
             registerScreenStateReceiver()
+            registerBatteryReceiver()
             uiManager.showGestureHintsIfNeeded()
 
             handler.postDelayed({
@@ -187,6 +214,46 @@ class SlideshowActivity : AppCompatActivity() {
         }
     }
 
+    private fun registerBatteryReceiver() {
+        try {
+            val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            registerReceiver(batteryReceiver, filter)
+            isBatteryReceiverRegistered = true
+            Log.d(TAG, "Battery receiver registered")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error registering battery receiver", e)
+            isBatteryReceiverRegistered = false
+        }
+    }
+
+    private fun getBatteryLevel(): Int {
+        return try {
+            val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+            batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting battery level", e)
+            100 // Assume full battery if we can't get the level
+        }
+    }
+
+    private fun isBatteryLevelSufficient(): Boolean {
+        val batteryLevel = getBatteryLevel()
+        return batteryLevel > MIN_BATTERY_LEVEL
+    }
+
+    private fun showBatteryWarningAndExit() {
+        val batteryLevel = getBatteryLevel()
+        Toast.makeText(
+            this,
+            "Battery too low ($batteryLevel%). Slideshow stopped to preserve battery.",
+            Toast.LENGTH_LONG
+        ).show()
+
+        handler.postDelayed({
+            finish()
+        }, 2000) // Give time to read the message
+    }
+
     private fun startSlideshow() {
         if (photoListManager.getCurrentPhotoList().isNotEmpty() && isActivityActive && !hasStartedSlideshow) {
             hasStartedSlideshow = true
@@ -201,6 +268,13 @@ class SlideshowActivity : AppCompatActivity() {
         resumeAutomaticProgression: Boolean = false
     ) {
         if (photoListManager.getCurrentPhotoList().isEmpty() || !isActivityActive) return
+
+        // Additional battery check before loading next image
+        if (!isBatteryLevelSufficient()) {
+            Log.w(TAG, "Battery too low during slideshow, exiting")
+            showBatteryWarningAndExit()
+            return
+        }
 
         val currentPhoto = photoListManager.getCurrentPhoto()
         Log.d(TAG, "Loading image ${photoListManager.getCurrentIndex() + 1}/${photoListManager.getCurrentPhotoList().size}: ${currentPhoto.orientation}")
@@ -342,7 +416,17 @@ class SlideshowActivity : AppCompatActivity() {
                 isReceiverRegistered = false
                 Log.d(TAG, "Screen state receiver unregistered")
             } catch (e: Exception) {
-                Log.w(TAG, "Error unregistering receiver", e)
+                Log.w(TAG, "Error unregistering screen receiver", e)
+            }
+        }
+
+        if (isBatteryReceiverRegistered) {
+            try {
+                unregisterReceiver(batteryReceiver)
+                isBatteryReceiverRegistered = false
+                Log.d(TAG, "Battery receiver unregistered")
+            } catch (e: Exception) {
+                Log.w(TAG, "Error unregistering battery receiver", e)
             }
         }
     }

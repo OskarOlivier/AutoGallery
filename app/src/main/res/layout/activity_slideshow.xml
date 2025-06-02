@@ -8,7 +8,7 @@
     android:clickable="true"
     android:focusable="true">
 
-    <!-- Background image views for blurred background effect -->
+    <!-- Background image views for blurred background effect - regular ImageViews -->
     <ImageView
         android:id="@+id/currentBackgroundImageView"
         android:layout_width="match_parent"
@@ -25,14 +25,14 @@
         android:contentDescription="Next background image" />
 
     <!-- Main image views for the slideshow -->
-    <ImageView
+    <com.meerkat.autogallery.BorderImageView
         android:id="@+id/currentImageView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:scaleType="centerInside"
         android:contentDescription="Current slideshow image" />
 
-    <ImageView
+    <com.meerkat.autogallery.BorderImageView
         android:id="@+id/nextImageView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

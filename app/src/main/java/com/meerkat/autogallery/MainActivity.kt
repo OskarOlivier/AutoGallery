@@ -2,10 +2,14 @@
 package com.meerkat.autogallery
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.net.Uri
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -26,6 +30,20 @@ class MainActivity : AppCompatActivity() {
     private lateinit var settingsButton: MaterialButton
     private lateinit var testButton: MaterialButton
     private lateinit var photoCountText: MaterialTextView
+    private var isBatteryReceiverRegistered = false
+
+    companion object {
+        private const val MIN_BATTERY_LEVEL = 20
+    }
+
+    // Battery receiver to update UI when battery changes
+    private val batteryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_BATTERY_CHANGED) {
+                updateUI()
+            }
+        }
+    }
 
     private val multiplePermissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -66,9 +84,38 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         try {
+            registerBatteryReceiver()
             updateUI()
         } catch (e: Exception) {
             Log.e("MainActivity", "Error in onResume", e)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        unregisterBatteryReceiver()
+    }
+
+    private fun registerBatteryReceiver() {
+        if (!isBatteryReceiverRegistered) {
+            try {
+                val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+                registerReceiver(batteryReceiver, filter)
+                isBatteryReceiverRegistered = true
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Error registering battery receiver", e)
+            }
+        }
+    }
+
+    private fun unregisterBatteryReceiver() {
+        if (isBatteryReceiverRegistered) {
+            try {
+                unregisterReceiver(batteryReceiver)
+                isBatteryReceiverRegistered = false
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Error unregistering battery receiver", e)
+            }
         }
     }
 
@@ -122,6 +169,12 @@ class MainActivity : AppCompatActivity() {
                 try {
                     val settings = preferencesManager.loadSettings()
                     if (settings.photoInfoList.isNotEmpty() || settings.selectedPhotos.isNotEmpty()) {
+                        // Check battery before starting test slideshow
+                        if (!isBatteryLevelSufficient()) {
+                            val batteryLevel = getBatteryLevel()
+                            Toast.makeText(this, "Battery too low ($batteryLevel%) to start slideshow", Toast.LENGTH_LONG).show()
+                            return@setOnClickListener
+                        }
                         startActivity(Intent(this, SlideshowActivity::class.java))
                     } else {
                         Toast.makeText(this, "Please select photos in Settings first", Toast.LENGTH_SHORT).show()
@@ -133,6 +186,47 @@ class MainActivity : AppCompatActivity() {
             }
         } catch (e: Exception) {
             Log.e("MainActivity", "Error setting up click listeners", e)
+        }
+    }
+
+    private fun getBatteryLevel(): Int {
+        return try {
+            val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+            batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error getting battery level", e)
+            100 // Assume full battery if we can't get the level
+        }
+    }
+
+    private fun isBatteryLevelSufficient(): Boolean {
+        val batteryLevel = getBatteryLevel()
+        return batteryLevel > MIN_BATTERY_LEVEL
+    }
+
+    private fun isDeviceCharging(): Boolean {
+        return try {
+            val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+            batteryManager.isCharging
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error checking charging status", e)
+            false
+        }
+    }
+
+    private fun getBatteryStatusText(): String {
+        val batteryLevel = getBatteryLevel()
+        val isCharging = isDeviceCharging()
+        val isSufficient = isBatteryLevelSufficient()
+
+        return buildString {
+            append("🔋 $batteryLevel%")
+            if (isCharging) {
+                append(" (Charging)")
+            }
+            if (!isSufficient) {
+                append(" - Too low for slideshow")
+            }
         }
     }
 
@@ -184,15 +278,27 @@ class MainActivity : AppCompatActivity() {
                             append("(All photos will be shown - orientation filtering disabled)")
                         }
                     }
+
+                    // Add battery status
+                    appendLine()
+                    append(getBatteryStatusText())
                 }
             } else {
-                "No photos selected"
+                buildString {
+                    append("No photos selected")
+                    appendLine()
+                    append(getBatteryStatusText())
+                }
             }
 
             photoCountText.text = photoCountDetail
 
             statusText.text = when {
                 !settings.isEnabled -> "Auto Gallery is disabled"
+                !isBatteryLevelSufficient() -> {
+                    val batteryLevel = getBatteryLevel()
+                    "Battery too low ($batteryLevel%) for slideshow"
+                }
                 photoCount == 0 -> "Please select photos in Settings"
                 settings.enableOrientationFiltering -> {
                     val currentOrientation = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
@@ -294,5 +400,10 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.e("MainActivity", "Error setting up service", e)
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        unregisterBatteryReceiver()
     }
 }

@@ -1,11 +1,13 @@
-// SlideshowZoomManager.kt - Let zoom animations complete naturally when paused
+// SlideshowZoomManager.kt - Updated to respect edge buffer requirements
 package com.meerkat.autogallery
 
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
+import android.graphics.drawable.Drawable
 import android.util.Log
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.ImageView
+import kotlin.math.max
 
 class SlideshowZoomManager {
 
@@ -14,16 +16,48 @@ class SlideshowZoomManager {
 
     companion object {
         private const val TAG = "SlideshowZoomManager"
+        private const val EDGE_BUFFER = 20 // 10px on each edge
+    }
+
+    /**
+     * Calculate the minimum scale factor needed to maintain 10px buffer on touching edges
+     */
+    private fun calculateMinimumSafeScale(imageView: ImageView): Float {
+        val drawable = imageView.drawable ?: return 1f
+
+        val imageWidth = drawable.intrinsicWidth
+        val imageHeight = drawable.intrinsicHeight
+
+        if (imageWidth <= 0 || imageHeight <= 0) return 1f
+
+        val metrics = imageView.context.resources.displayMetrics
+        val screenWidth = metrics.widthPixels
+        val screenHeight = metrics.heightPixels
+
+        val imageAspectRatio = imageWidth.toFloat() / imageHeight.toFloat()
+        val screenAspectRatio = screenWidth.toFloat() / screenHeight.toFloat()
+
+        val minSafeScale = if (imageAspectRatio > screenAspectRatio) {
+            // Image is wider - will touch top/bottom edges, needs buffer for height
+            (screenHeight + EDGE_BUFFER).toFloat() / screenHeight.toFloat()
+        } else {
+            // Image is taller - will touch left/right edges, needs buffer for width
+            (screenWidth + EDGE_BUFFER).toFloat() / screenWidth.toFloat()
+        }
+
+        Log.d(TAG, "Calculated minimum safe scale: $minSafeScale for image ${imageWidth}x${imageHeight}")
+        return minSafeScale
     }
 
     fun setInitialScale(imageView: ImageView, photoIndex: Int, settings: GallerySettings) {
-        val zoomScale = 1f + (settings.zoomAmount / 100f)
+        val minSafeScale = calculateMinimumSafeScale(imageView)
+        val zoomScale = minSafeScale + (settings.zoomAmount / 100f)
 
         val initialScale = when (settings.zoomType) {
-            ZoomType.SAWTOOTH -> 1f  // Always start from 1.0 for sawtooth
+            ZoomType.SAWTOOTH -> minSafeScale  // Start from minimum safe scale, not 1.0
             ZoomType.SINE_WAVE -> {
                 if (photoIndex % 2 == 0) {
-                    1f  // Start from 1.0 for even indices
+                    minSafeScale  // Start from minimum safe scale for even indices
                 } else {
                     zoomScale  // Start from max zoom for odd indices
                 }
@@ -33,7 +67,7 @@ class SlideshowZoomManager {
         imageView.scaleX = initialScale
         imageView.scaleY = initialScale
 
-        Log.d(TAG, "Set initial scale $initialScale for image at index $photoIndex")
+        Log.d(TAG, "Set initial scale $initialScale (minSafe: $minSafeScale) for image at index $photoIndex")
     }
 
     fun startZoomOnView(imageView: ImageView, photoIndex: Int, settings: GallerySettings, isPreTransition: Boolean = false) {
@@ -67,8 +101,9 @@ class SlideshowZoomManager {
     private fun startSawtoothZoom(imageView: ImageView, photoIndex: Int, settings: GallerySettings) {
         currentZoomAnimatorSet?.cancel()
 
-        val zoomScale = 1f + (settings.zoomAmount / 100f)
-        val startScale = 1f
+        val minSafeScale = calculateMinimumSafeScale(imageView)
+        val zoomScale = minSafeScale + (settings.zoomAmount / 100f)
+        val startScale = minSafeScale  // Start from minimum safe scale
         val endScale = zoomScale
 
         Log.d(TAG, "Starting SAWTOOTH zoom: $startScale -> $endScale for photo index $photoIndex")
@@ -79,12 +114,13 @@ class SlideshowZoomManager {
     private fun startSinewaveZoom(imageView: ImageView, photoIndex: Int, settings: GallerySettings) {
         currentZoomAnimatorSet?.cancel()
 
-        val zoomScale = 1f + (settings.zoomAmount / 100f)
+        val minSafeScale = calculateMinimumSafeScale(imageView)
+        val zoomScale = minSafeScale + (settings.zoomAmount / 100f)
 
         val (startScale, endScale) = if (photoIndex % 2 == 0) {
-            Pair(1f, zoomScale)  // Even indices: zoom in
+            Pair(minSafeScale, zoomScale)  // Even indices: zoom in from safe scale
         } else {
-            Pair(zoomScale, 1f)  // Odd indices: zoom out
+            Pair(zoomScale, minSafeScale)  // Odd indices: zoom out to safe scale
         }
 
         Log.d(TAG, "Starting SINEWAVE zoom: $startScale -> $endScale for photo index $photoIndex")

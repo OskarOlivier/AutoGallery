@@ -26,6 +26,7 @@ class ScreenStateService : Service() {
         private const val TAG = "ScreenStateService"
         private const val CHANNEL_ID = "auto_gallery_service"
         private const val NOTIFICATION_ID = 1001
+        private const val MIN_BATTERY_LEVEL = 20 // Minimum battery level to start slideshow
     }
 
     private val screenStateReceiver = object : BroadcastReceiver() {
@@ -46,12 +47,26 @@ class ScreenStateService : Service() {
         }
     }
 
+    // Battery level receiver to monitor battery changes
+    private val batteryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_BATTERY_CHANGED) {
+                val batteryLevel = getBatteryLevel()
+                Log.d(TAG, "Battery level changed: $batteryLevel%")
+
+                // If slideshow is running and battery is too low, we'll let SlideshowActivity handle it
+                // This receiver mainly logs battery changes for debugging
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "Service created")
         preferencesManager = PreferencesManager(this)
         createNotificationChannel()
         registerScreenStateReceiver()
+        registerBatteryReceiver()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -76,6 +91,16 @@ class ScreenStateService : Service() {
         }
     }
 
+    private fun registerBatteryReceiver() {
+        try {
+            val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            registerReceiver(batteryReceiver, filter)
+            Log.d(TAG, "Battery receiver registered")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error registering battery receiver", e)
+        }
+    }
+
     private fun checkAndStartSlideshow() {
         Log.d(TAG, "Checking if slideshow should start - isScreenOff: $isScreenOff, slideshowStarted: $slideshowStarted")
 
@@ -90,6 +115,13 @@ class ScreenStateService : Service() {
             return
         }
 
+        // Check battery level first
+        val batteryLevel = getBatteryLevel()
+        if (!isBatteryLevelSufficient()) {
+            Log.d(TAG, "Not starting slideshow - battery too low ($batteryLevel%)")
+            return
+        }
+
         // Check charging conditions
         if (settings.enableOnCharging && !settings.enableAlways) {
             if (!isDeviceCharging()) {
@@ -98,7 +130,7 @@ class ScreenStateService : Service() {
             }
         }
 
-        Log.d(TAG, "Starting slideshow with delay")
+        Log.d(TAG, "Starting slideshow with delay (battery: $batteryLevel%)")
         // Start slideshow with a shorter delay since we made the activity more robust
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             if (isScreenOff && !slideshowStarted) {
@@ -108,6 +140,23 @@ class ScreenStateService : Service() {
                 Log.d(TAG, "Slideshow start cancelled - screen state changed")
             }
         }, 1500) // Reduced delay to 1.5 seconds
+    }
+
+    private fun getBatteryLevel(): Int {
+        return try {
+            val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+            val batteryLevel = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            Log.d(TAG, "Current battery level: $batteryLevel%")
+            batteryLevel
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting battery level", e)
+            100 // Assume full battery if we can't get the level
+        }
+    }
+
+    private fun isBatteryLevelSufficient(): Boolean {
+        val batteryLevel = getBatteryLevel()
+        return batteryLevel > MIN_BATTERY_LEVEL
     }
 
     private fun isDeviceCharging(): Boolean {
@@ -168,9 +217,17 @@ class ScreenStateService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // Add battery level to notification
+        val batteryLevel = getBatteryLevel()
+        val batteryStatus = if (isBatteryLevelSufficient()) {
+            "Battery: $batteryLevel%"
+        } else {
+            "Battery too low: $batteryLevel%"
+        }
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Auto Gallery")
-            .setContentText("Monitoring screen state for slideshow")
+            .setContentText("Monitoring screen state • $batteryStatus")
             .setSmallIcon(R.drawable.ic_photo_library)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
@@ -183,8 +240,13 @@ class ScreenStateService : Service() {
         Log.d(TAG, "Service destroyed")
         try {
             unregisterReceiver(screenStateReceiver)
+            unregisterReceiver(batteryReceiver)
         } catch (e: Exception) {
-            Log.w(TAG, "Error unregistering receiver", e)
+            Log.w(TAG, "Error unregistering receivers", e)
         }
     }
+
+    // Utility methods for other classes to use
+    fun getCurrentBatteryLevel(): Int = getBatteryLevel()
+    fun isBatterySufficient(): Boolean = isBatteryLevelSufficient()
 }
