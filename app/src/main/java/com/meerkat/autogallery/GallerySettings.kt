@@ -13,6 +13,11 @@ enum class ImageOrientation {
     SQUARE        // Nearly square (0.8 <= aspect ratio <= 1.2)
 }
 
+enum class BatteryManagementMode(val displayName: String) {
+    CHARGING_ONLY("Only when charging"),
+    BATTERY_LEVEL_ONLY("Only when battery >20%")
+}
+
 data class GallerySettings(
     val isEnabled: Boolean = false,
     val selectedPhotos: Set<String> = emptySet(), // Keep for backward compatibility
@@ -23,8 +28,7 @@ data class GallerySettings(
     val zoomType: ZoomType = ZoomType.SAWTOOTH,
     val zoomAmount: Int = 3, // zoom percentage (0-5, representing 100%-105%)
     val enableBlurredBackground: Boolean = true,
-    val enableOnCharging: Boolean = false,
-    val enableAlways: Boolean = true,
+    val batteryManagementMode: BatteryManagementMode = BatteryManagementMode.CHARGING_ONLY,
     val enableOrientationFiltering: Boolean = true, // New setting to enable/disable orientation filtering
     val showSquareImagesInBothOrientations: Boolean = true, // Whether to show square images in both orientations
     val enableFeathering: Boolean = true // Enable/disable edge feathering effect

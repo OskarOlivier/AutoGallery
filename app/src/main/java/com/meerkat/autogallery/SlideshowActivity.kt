@@ -1,4 +1,4 @@
-// SlideshowActivity.kt - Updated with feathering support
+// SlideshowActivity.kt - Updated with feathering support and new battery management
 package com.meerkat.autogallery
 
 import android.content.BroadcastReceiver
@@ -74,15 +74,16 @@ class SlideshowActivity : AppCompatActivity() {
         }
     }
 
-    // Battery monitoring receiver
+    // Battery monitoring receiver with new battery management logic
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == Intent.ACTION_BATTERY_CHANGED) {
                 val batteryLevel = getBatteryLevel()
                 Log.d(TAG, "Battery level: $batteryLevel%")
 
-                if (batteryLevel <= MIN_BATTERY_LEVEL) {
-                    Log.d(TAG, "Battery too low ($batteryLevel%), exiting slideshow")
+                // Check if slideshow should continue based on new battery management
+                if (!canContinueBasedOnBattery()) {
+                    Log.d(TAG, "Battery conditions no longer met, exiting slideshow")
                     showBatteryWarningAndExit()
                 }
             }
@@ -100,9 +101,9 @@ class SlideshowActivity : AppCompatActivity() {
             initManagers()
             setupActivity()
 
-            // Check battery level before starting
-            if (!isBatteryLevelSufficient()) {
-                Log.w(TAG, "Battery too low to start slideshow")
+            // Check battery conditions before starting with new battery management
+            if (!canContinueBasedOnBattery()) {
+                Log.w(TAG, "Battery conditions not met to start slideshow")
                 showBatteryWarningAndExit()
                 return
             }
@@ -241,18 +242,52 @@ class SlideshowActivity : AppCompatActivity() {
         }
     }
 
-    private fun isBatteryLevelSufficient(): Boolean {
+    private fun isDeviceCharging(): Boolean {
+        return try {
+            val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+            batteryManager.isCharging
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking charging status", e)
+            false
+        }
+    }
+
+    private fun canContinueBasedOnBattery(): Boolean {
+        val settings = photoListManager.getSettings()
         val batteryLevel = getBatteryLevel()
-        return batteryLevel > MIN_BATTERY_LEVEL
+        val isCharging = isDeviceCharging()
+
+        return when (settings.batteryManagementMode) {
+            BatteryManagementMode.CHARGING_ONLY -> {
+                Log.d(TAG, "Battery mode: CHARGING_ONLY - charging: $isCharging")
+                isCharging
+            }
+            BatteryManagementMode.BATTERY_LEVEL_ONLY -> {
+                Log.d(TAG, "Battery mode: BATTERY_LEVEL_ONLY - level: $batteryLevel% (required: >$MIN_BATTERY_LEVEL%)")
+                batteryLevel > MIN_BATTERY_LEVEL
+            }
+        }
     }
 
     private fun showBatteryWarningAndExit() {
+        val settings = photoListManager.getSettings()
         val batteryLevel = getBatteryLevel()
-        Toast.makeText(
-            this,
-            "Battery too low ($batteryLevel%). Slideshow stopped to preserve battery.",
-            Toast.LENGTH_LONG
-        ).show()
+        val isCharging = isDeviceCharging()
+
+        val message = when (settings.batteryManagementMode) {
+            BatteryManagementMode.CHARGING_ONLY -> {
+                if (isCharging) {
+                    "Battery issue detected. Slideshow stopped."
+                } else {
+                    "Device unplugged. Slideshow stopped."
+                }
+            }
+            BatteryManagementMode.BATTERY_LEVEL_ONLY -> {
+                "Battery too low ($batteryLevel%). Slideshow stopped to preserve battery."
+            }
+        }
+
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
 
         handler.postDelayed({
             finish()
@@ -275,8 +310,8 @@ class SlideshowActivity : AppCompatActivity() {
         if (photoListManager.getCurrentPhotoList().isEmpty() || !isActivityActive) return
 
         // Additional battery check before loading next image
-        if (!isBatteryLevelSufficient()) {
-            Log.w(TAG, "Battery too low during slideshow, exiting")
+        if (!canContinueBasedOnBattery()) {
+            Log.w(TAG, "Battery conditions no longer met during slideshow, exiting")
             showBatteryWarningAndExit()
             return
         }

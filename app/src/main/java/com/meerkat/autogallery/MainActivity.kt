@@ -169,10 +169,9 @@ class MainActivity : AppCompatActivity() {
                 try {
                     val settings = preferencesManager.loadSettings()
                     if (settings.photoInfoList.isNotEmpty() || settings.selectedPhotos.isNotEmpty()) {
-                        // Check battery before starting test slideshow
-                        if (!isBatteryLevelSufficient()) {
-                            val batteryLevel = getBatteryLevel()
-                            Toast.makeText(this, "Battery too low ($batteryLevel%) to start slideshow", Toast.LENGTH_LONG).show()
+                        // Check battery conditions before starting test slideshow
+                        if (!canStartSlideshowBasedOnBattery(settings.batteryManagementMode)) {
+                            showBatteryError(settings.batteryManagementMode)
                             return@setOnClickListener
                         }
                         startActivity(Intent(this, SlideshowActivity::class.java))
@@ -199,11 +198,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun isBatteryLevelSufficient(): Boolean {
-        val batteryLevel = getBatteryLevel()
-        return batteryLevel > MIN_BATTERY_LEVEL
-    }
-
     private fun isDeviceCharging(): Boolean {
         return try {
             val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
@@ -214,18 +208,58 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun getBatteryStatusText(): String {
+    private fun canStartSlideshowBasedOnBattery(batteryManagementMode: BatteryManagementMode): Boolean {
         val batteryLevel = getBatteryLevel()
         val isCharging = isDeviceCharging()
-        val isSufficient = isBatteryLevelSufficient()
 
-        return buildString {
-            append("🔋 $batteryLevel%")
-            if (isCharging) {
-                append(" (Charging)")
+        return when (batteryManagementMode) {
+            BatteryManagementMode.CHARGING_ONLY -> isCharging
+            BatteryManagementMode.BATTERY_LEVEL_ONLY -> batteryLevel > MIN_BATTERY_LEVEL
+        }
+    }
+
+    private fun showBatteryError(batteryManagementMode: BatteryManagementMode) {
+        val batteryLevel = getBatteryLevel()
+        val isCharging = isDeviceCharging()
+
+        val message = when (batteryManagementMode) {
+            BatteryManagementMode.CHARGING_ONLY -> {
+                "Device must be charging to start slideshow (currently ${if (isCharging) "charging" else "not charging"})"
             }
-            if (!isSufficient) {
-                append(" - Too low for slideshow")
+            BatteryManagementMode.BATTERY_LEVEL_ONLY -> {
+                "Battery level too low ($batteryLevel%) to start slideshow. Minimum: ${MIN_BATTERY_LEVEL + 1}%"
+            }
+        }
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    }
+
+    private fun getBatteryStatusText(settings: GallerySettings): String {
+        val batteryLevel = getBatteryLevel()
+        val isCharging = isDeviceCharging()
+
+        return when (settings.batteryManagementMode) {
+            BatteryManagementMode.CHARGING_ONLY -> {
+                buildString {
+                    append("🔋 $batteryLevel%")
+                    if (isCharging) {
+                        append(" (Charging - Ready)")
+                    } else {
+                        append(" (Not charging - Waiting for charger)")
+                    }
+                }
+            }
+            BatteryManagementMode.BATTERY_LEVEL_ONLY -> {
+                buildString {
+                    append("🔋 $batteryLevel%")
+                    if (isCharging) {
+                        append(" (Charging)")
+                    }
+                    if (batteryLevel <= MIN_BATTERY_LEVEL) {
+                        append(" - Too low for slideshow")
+                    } else {
+                        append(" - Ready")
+                    }
+                }
             }
         }
     }
@@ -281,13 +315,13 @@ class MainActivity : AppCompatActivity() {
 
                     // Add battery status
                     appendLine()
-                    append(getBatteryStatusText())
+                    append(getBatteryStatusText(settings))
                 }
             } else {
                 buildString {
                     append("No photos selected")
                     appendLine()
-                    append(getBatteryStatusText())
+                    append(getBatteryStatusText(settings))
                 }
             }
 
@@ -295,9 +329,14 @@ class MainActivity : AppCompatActivity() {
 
             statusText.text = when {
                 !settings.isEnabled -> "Auto Gallery is disabled"
-                !isBatteryLevelSufficient() -> {
-                    val batteryLevel = getBatteryLevel()
-                    "Battery too low ($batteryLevel%) for slideshow"
+                !canStartSlideshowBasedOnBattery(settings.batteryManagementMode) -> {
+                    when (settings.batteryManagementMode) {
+                        BatteryManagementMode.CHARGING_ONLY -> "Waiting for device to be plugged in"
+                        BatteryManagementMode.BATTERY_LEVEL_ONLY -> {
+                            val batteryLevel = getBatteryLevel()
+                            "Battery level too low ($batteryLevel%) for slideshow"
+                        }
+                    }
                 }
                 photoCount == 0 -> "Please select photos in Settings"
                 settings.enableOrientationFiltering -> {

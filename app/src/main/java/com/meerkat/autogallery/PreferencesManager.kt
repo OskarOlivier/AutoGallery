@@ -26,11 +26,18 @@ class PreferencesManager(context: Context) {
             putString("zoom_type", settings.zoomType.name)
             putInt("zoom_amount", settings.zoomAmount)
             putBoolean("enable_blurred_background", settings.enableBlurredBackground)
-            putBoolean("enable_on_charging", settings.enableOnCharging)
-            putBoolean("enable_always", settings.enableAlways)
+
+            // New battery management setting
+            putString("battery_management_mode", settings.batteryManagementMode.name)
+
             putBoolean("enable_orientation_filtering", settings.enableOrientationFiltering)
             putBoolean("show_square_images_in_both_orientations", settings.showSquareImagesInBothOrientations)
             putBoolean("enable_feathering", settings.enableFeathering)
+
+            // Clean up old battery settings if they exist
+            remove("enable_on_charging")
+            remove("enable_always")
+
             apply()
         }
     }
@@ -56,6 +63,9 @@ class PreferencesManager(context: Context) {
         // Also maintain the old selectedPhotos set for backward compatibility
         val selectedPhotos = photoInfoList.map { it.uri }.toSet()
 
+        // Handle battery management mode migration
+        val batteryManagementMode = migrateBatterySettings()
+
         return GallerySettings(
             isEnabled = prefs.getBoolean("is_enabled", false),
             selectedPhotos = selectedPhotos,
@@ -78,12 +88,40 @@ class PreferencesManager(context: Context) {
             },
             zoomAmount = prefs.getInt("zoom_amount", 3).coerceIn(0, 5),
             enableBlurredBackground = prefs.getBoolean("enable_blurred_background", true),
-            enableOnCharging = prefs.getBoolean("enable_on_charging", false),
-            enableAlways = prefs.getBoolean("enable_always", true),
+            batteryManagementMode = batteryManagementMode,
             enableOrientationFiltering = prefs.getBoolean("enable_orientation_filtering", true),
             showSquareImagesInBothOrientations = prefs.getBoolean("show_square_images_in_both_orientations", true),
             enableFeathering = prefs.getBoolean("enable_feathering", true)
         )
+    }
+
+    private fun migrateBatterySettings(): BatteryManagementMode {
+        // Check if new setting already exists
+        val newModeName = prefs.getString("battery_management_mode", null)
+        if (newModeName != null) {
+            return try {
+                BatteryManagementMode.valueOf(newModeName)
+            } catch (e: Exception) {
+                BatteryManagementMode.CHARGING_ONLY
+            }
+        }
+
+        // Migrate from old settings if they exist
+        val hasOldSettings = prefs.contains("enable_on_charging") || prefs.contains("enable_always")
+
+        return if (hasOldSettings) {
+            val enableOnCharging = prefs.getBoolean("enable_on_charging", false)
+            val enableAlways = prefs.getBoolean("enable_always", true)
+
+            when {
+                enableAlways -> BatteryManagementMode.BATTERY_LEVEL_ONLY
+                enableOnCharging -> BatteryManagementMode.CHARGING_ONLY
+                else -> BatteryManagementMode.CHARGING_ONLY // Default fallback
+            }
+        } else {
+            // No old settings, use default
+            BatteryManagementMode.CHARGING_ONLY
+        }
     }
 
     private fun photoInfoListToJson(photoInfoList: List<PhotoInfo>): String {

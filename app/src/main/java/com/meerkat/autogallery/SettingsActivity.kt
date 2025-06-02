@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import android.widget.ArrayAdapter
+import android.widget.RadioGroup
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -19,6 +20,7 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.checkbox.MaterialCheckBox
+import com.google.android.material.radiobutton.MaterialRadioButton
 import com.google.android.material.slider.Slider
 import com.google.android.material.textview.MaterialTextView
 import android.widget.Spinner
@@ -39,8 +41,9 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var zoomAmountSlider: Slider
     private lateinit var zoomAmountText: MaterialTextView
     private lateinit var blurredBackgroundCheckbox: MaterialCheckBox
-    private lateinit var chargingOnlyCheckbox: MaterialCheckBox
-    private lateinit var alwaysEnabledCheckbox: MaterialCheckBox
+    private lateinit var batteryManagementRadioGroup: RadioGroup
+    private lateinit var chargingOnlyRadio: MaterialRadioButton
+    private lateinit var batteryLevelOnlyRadio: MaterialRadioButton
     private lateinit var orientationFilteringCheckbox: MaterialCheckBox
     private lateinit var squareImagesCheckbox: MaterialCheckBox
     private lateinit var featheringCheckbox: MaterialCheckBox
@@ -92,8 +95,9 @@ class SettingsActivity : AppCompatActivity() {
         zoomAmountSlider = findViewById(R.id.zoomAmountSlider)
         zoomAmountText = findViewById(R.id.zoomAmountText)
         blurredBackgroundCheckbox = findViewById(R.id.blurredBackgroundCheckbox)
-        chargingOnlyCheckbox = findViewById(R.id.chargingOnlyCheckbox)
-        alwaysEnabledCheckbox = findViewById(R.id.alwaysEnabledCheckbox)
+        batteryManagementRadioGroup = findViewById(R.id.batteryManagementRadioGroup)
+        chargingOnlyRadio = findViewById(R.id.chargingOnlyRadio)
+        batteryLevelOnlyRadio = findViewById(R.id.batteryLevelOnlyRadio)
         orientationFilteringCheckbox = findViewById(R.id.orientationFilteringCheckbox)
         squareImagesCheckbox = findViewById(R.id.squareImagesCheckbox)
         featheringCheckbox = findViewById(R.id.featheringCheckbox)
@@ -141,8 +145,13 @@ class SettingsActivity : AppCompatActivity() {
         updateZoomAmountText(settings.zoomAmount)
 
         blurredBackgroundCheckbox.isChecked = settings.enableBlurredBackground
-        chargingOnlyCheckbox.isChecked = settings.enableOnCharging
-        alwaysEnabledCheckbox.isChecked = settings.enableAlways
+
+        // Set battery management radio buttons
+        when (settings.batteryManagementMode) {
+            BatteryManagementMode.CHARGING_ONLY -> chargingOnlyRadio.isChecked = true
+            BatteryManagementMode.BATTERY_LEVEL_ONLY -> batteryLevelOnlyRadio.isChecked = true
+        }
+
         orientationFilteringCheckbox.isChecked = settings.enableOrientationFiltering
         squareImagesCheckbox.isChecked = settings.showSquareImagesInBothOrientations
         featheringCheckbox.isChecked = settings.enableFeathering
@@ -183,8 +192,10 @@ class SettingsActivity : AppCompatActivity() {
         })
 
         blurredBackgroundCheckbox.setOnCheckedChangeListener { _, _ -> saveCurrentSettings() }
-        chargingOnlyCheckbox.setOnCheckedChangeListener { _, _ -> saveCurrentSettings() }
-        alwaysEnabledCheckbox.setOnCheckedChangeListener { _, _ -> saveCurrentSettings() }
+
+        // Battery management radio group listener
+        batteryManagementRadioGroup.setOnCheckedChangeListener { _, _ -> saveCurrentSettings() }
+
         orientationFilteringCheckbox.setOnCheckedChangeListener { _, _ ->
             saveCurrentSettings()
             updateOrientationStats()
@@ -346,6 +357,13 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun saveCurrentSettings() {
+        // Get selected battery management mode
+        val batteryManagementMode = when (batteryManagementRadioGroup.checkedRadioButtonId) {
+            R.id.chargingOnlyRadio -> BatteryManagementMode.CHARGING_ONLY
+            R.id.batteryLevelOnlyRadio -> BatteryManagementMode.BATTERY_LEVEL_ONLY
+            else -> BatteryManagementMode.CHARGING_ONLY // Default fallback
+        }
+
         val newSettings = GallerySettings(
             isEnabled = settings.isEnabled,
             selectedPhotos = photoInfoList.map { it.uri }.toSet(),
@@ -356,8 +374,7 @@ class SettingsActivity : AppCompatActivity() {
             zoomType = ZoomType.values()[zoomTypeSpinner.selectedItemPosition],
             zoomAmount = zoomAmountSlider.value.toInt(),
             enableBlurredBackground = blurredBackgroundCheckbox.isChecked,
-            enableOnCharging = chargingOnlyCheckbox.isChecked,
-            enableAlways = alwaysEnabledCheckbox.isChecked,
+            batteryManagementMode = batteryManagementMode,
             enableOrientationFiltering = orientationFilteringCheckbox.isChecked,
             showSquareImagesInBothOrientations = squareImagesCheckbox.isChecked,
             enableFeathering = featheringCheckbox.isChecked
