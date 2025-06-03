@@ -1,7 +1,6 @@
 // MainActivity.kt
 package com.meerkat.slumberslide
 
-import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -44,14 +43,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val multiplePermissionsLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val allGranted = permissions.values.all { it }
-        if (allGranted) {
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
             setupService()
         } else {
-            Toast.makeText(this, "Permissions required for SlumberSlide to work", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Notification permission recommended for service status", Toast.LENGTH_LONG).show()
+            setupService() // Still allow app to work without notifications
         }
     }
 
@@ -61,7 +60,7 @@ class MainActivity : AppCompatActivity() {
         if (Settings.canDrawOverlays(this)) {
             checkAndRequestPermissions()
         } else {
-            Toast.makeText(this, "Overlay permission required for SlumberSlide", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Overlay permission required for Auto Gallery", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -329,7 +328,7 @@ class MainActivity : AppCompatActivity() {
             photoCountText.text = imageCountDetail
 
             statusText.text = when {
-                !settings.isEnabled -> "SlumberSlide is disabled"
+                !settings.isEnabled -> "Auto Gallery is disabled"
                 folderInfo.uri.isEmpty() -> "Please select a folder in Settings"
                 !canStartSlideshowBasedOnBattery(settings.batteryManagementMode) -> {
                     when (settings.batteryManagementMode) {
@@ -356,13 +355,13 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     if (availableForCurrentOrientation > 0) {
-                        "SlumberSlide is active - will start after ${idleTimeoutSeconds}s idle"
+                        "Auto Gallery is active - will start after ${idleTimeoutSeconds}s idle"
                     } else {
                         val orientationName = if (currentOrientation == ImageOrientation.LANDSCAPE) "landscape" else "portrait"
                         "No images available for $orientationName mode"
                     }
                 }
-                else -> "SlumberSlide is active - will start after ${idleTimeoutSeconds}s idle"
+                else -> "Auto Gallery is active - will start after ${idleTimeoutSeconds}s idle"
             }
         } catch (e: Exception) {
             Log.e("MainActivity", "Error updating UI", e)
@@ -394,32 +393,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkAndRequestPermissions() {
         try {
-            val permissions = mutableListOf<String>()
-
+            // Only check for notification permission on Android 13+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES)
+                if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) {
-                    permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
-                }
-            } else {
-                if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
-                    != PackageManager.PERMISSION_GRANTED) {
-                    permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+                    notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    return
                 }
             }
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                    != PackageManager.PERMISSION_GRANTED) {
-                    permissions.add(Manifest.permission.POST_NOTIFICATIONS)
-                }
-            }
-
-            if (permissions.isNotEmpty()) {
-                multiplePermissionsLauncher.launch(permissions.toTypedArray())
-            } else {
-                setupService()
-            }
+            setupService()
         } catch (e: Exception) {
             Log.e("MainActivity", "Error requesting permissions", e)
         }

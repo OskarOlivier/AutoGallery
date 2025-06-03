@@ -1,7 +1,6 @@
 // SettingsActivity.kt
 package com.meerkat.slumberslide
 
-import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -79,7 +78,7 @@ class SettingsActivity : AppCompatActivity() {
         setContentView(R.layout.activity_settings)
 
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        supportActionBar?.title = "SlumberSlide Settings"
+        supportActionBar?.title = "Auto Gallery Settings"
 
         preferencesManager = PreferencesManager(this)
         folderScanner = FolderScanner(this)
@@ -499,24 +498,17 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun checkPermissionStatus() {
-        val hasStoragePermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
-        } else {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
-        }
-
         val hasNotificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
         } else {
-            true
+            true // Not required on older versions
         }
 
         val hasOverlayPermission = Settings.canDrawOverlays(this)
 
         val status = when {
-            hasStoragePermission && hasNotificationPermission && hasOverlayPermission -> "✅ All permissions granted"
-            !hasStoragePermission -> "❌ Storage permission required"
-            !hasNotificationPermission -> "❌ Notification permission required"
+            hasNotificationPermission && hasOverlayPermission -> "✅ All permissions granted"
+            !hasNotificationPermission -> "⚠️ Notification permission recommended (for service status)"
             !hasOverlayPermission -> "❌ Overlay permission required"
             else -> "⚠️ Some permissions missing"
         }
@@ -531,41 +523,26 @@ class SettingsActivity : AppCompatActivity() {
             return
         }
 
-        val permissions = mutableListOf<String>()
-
+        // Only check notification permission on Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) != PackageManager.PERMISSION_GRANTED) {
-                permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
-            }
-        } else {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                return
             }
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                permissions.add(Manifest.permission.POST_NOTIFICATIONS)
-            }
-        }
-
-        if (permissions.isNotEmpty()) {
-            multiplePermissionsLauncher.launch(permissions.toTypedArray())
-        } else {
-            Toast.makeText(this, "All permissions already granted!", Toast.LENGTH_SHORT).show()
-            checkPermissionStatus()
-        }
+        Toast.makeText(this, "All permissions already granted!", Toast.LENGTH_SHORT).show()
+        checkPermissionStatus()
     }
 
-    private val multiplePermissionsLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
         checkPermissionStatus()
-        val allGranted = permissions.values.all { it }
-        if (allGranted) {
-            Toast.makeText(this, "All permissions granted!", Toast.LENGTH_SHORT).show()
+        if (granted) {
+            Toast.makeText(this, "Notification permission granted!", Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(this, "Some permissions denied. App may not work properly.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Notification permission denied. Service status won't be shown in notification.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -576,7 +553,7 @@ class SettingsActivity : AppCompatActivity() {
         if (Settings.canDrawOverlays(this)) {
             requestAllPermissions()
         } else {
-            Toast.makeText(this, "Overlay permission is required for SlumberSlide to work", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Overlay permission is required for Auto Gallery to work", Toast.LENGTH_LONG).show()
         }
     }
 
