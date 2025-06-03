@@ -98,7 +98,7 @@ class SlideshowGestureHandler(
                         isVertical && abs(deltaY) > MIN_SWIPE_DISTANCE && abs(velocityY) > MIN_SWIPE_VELOCITY -> {
                             // Vertical swipe - brightness control
                             val brightnessChange = deltaY * BRIGHTNESS_ADJUSTMENT_FACTOR // Swipe down (positive deltaY) increases brightness, swipe up (negative deltaY) decreases brightness
-                            val newBrightness = (currentBrightness + brightnessChange).coerceIn(0.0f, 1.0f)
+                            val newBrightness = (currentBrightness - brightnessChange).coerceIn(0.0f, 1.0f)
 
                             Log.d(TAG, "Vertical swipe - brightness ${currentBrightness * 100}% -> ${newBrightness * 100}%")
                             setBrightness(newBrightness)
@@ -131,7 +131,7 @@ class SlideshowGestureHandler(
                     // Only handle vertical scrolling for brightness if it's predominantly vertical
                     if (abs(totalDeltaY) > abs(totalDeltaX) && abs(totalDeltaY) > 20) {
                         val brightnessChange = distanceY * BRIGHTNESS_ADJUSTMENT_FACTOR // distanceY is positive when scrolling up
-                        val newBrightness = (currentBrightness - brightnessChange).coerceIn(0.0f, 1.0f)
+                        val newBrightness = (currentBrightness + brightnessChange).coerceIn(0.0f, 1.0f)
 
                         setBrightness(newBrightness)
                         return true

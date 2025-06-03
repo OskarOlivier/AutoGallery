@@ -25,6 +25,7 @@ import com.google.android.material.slider.Slider
 import com.google.android.material.textview.MaterialTextView
 import android.widget.Spinner
 import kotlinx.coroutines.*
+import kotlin.math.round
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -140,6 +141,15 @@ class SettingsActivity : AppCompatActivity() {
         zoomTypeSpinner.adapter = zoomAdapter
     }
 
+    /**
+     * Helper function to round a value to the nearest valid step for a slider
+     * This prevents crashes when loading saved values that don't align with step sizes
+     */
+    private fun roundToSliderStep(value: Float, valueFrom: Float, stepSize: Float): Float {
+        val steps = round((value - valueFrom) / stepSize)
+        return valueFrom + (steps * stepSize)
+    }
+
     private fun loadCurrentSettings() {
         slideDurationSlider.value = (settings.slideDuration / 1000).toFloat()
         updateSlideDurationText(settings.slideDuration / 1000)
@@ -159,11 +169,18 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         orientationFilteringSwitch.isChecked = settings.enableOrientationFiltering
-        squareDetectionSlider.value = settings.squareDetectionSensitivity
-        updateSquareDetectionText(settings.squareDetectionSensitivity)
+
+        // Round square detection sensitivity to nearest valid step (0.05)
+        val roundedSquareSensitivity = roundToSliderStep(settings.squareDetectionSensitivity, 0.5f, 0.05f)
+        squareDetectionSlider.value = roundedSquareSensitivity
+        updateSquareDetectionText(roundedSquareSensitivity)
+
         featheringSwitch.isChecked = settings.enableFeathering
-        slideshowBrightnessSlider.value = settings.slideshowBrightness
-        updateSlideshowBrightnessText(settings.slideshowBrightness)
+
+        // Round slideshow brightness to nearest valid step (0.05)
+        val roundedBrightness = roundToSliderStep(settings.slideshowBrightness, 0.1f, 0.05f)
+        slideshowBrightnessSlider.value = roundedBrightness
+        updateSlideshowBrightnessText(roundedBrightness)
     }
 
     private fun setupListeners() {
