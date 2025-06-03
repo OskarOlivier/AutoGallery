@@ -1,4 +1,4 @@
-// SlideshowActivity.kt - Updated with feathering support and new battery management
+// SlideshowActivity.kt - Updated with idle-based triggering and improved battery management
 package com.meerkat.autogallery
 
 import android.content.BroadcastReceiver
@@ -38,40 +38,14 @@ class SlideshowActivity : AppCompatActivity() {
     private lateinit var preferencesManager: PreferencesManager
     private var isActivityActive = false
     private var hasStartedSlideshow = false
-    private var startTime = 0L
-    private var shouldIgnoreScreenOn = true
-    private var isReceiverRegistered = false
     private var isBatteryReceiverRegistered = false
+    private var isExitReceiverRegistered = false
 
     private val handler = Handler(Looper.getMainLooper())
 
     companion object {
         private const val TAG = "SlideshowActivity"
         private const val MIN_BATTERY_LEVEL = 20
-    }
-
-    private val screenStateReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            Log.d(TAG, "Screen state changed: ${intent?.action}")
-            when (intent?.action) {
-                Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT -> {
-                    val timeSinceStart = System.currentTimeMillis() - startTime
-                    Log.d(TAG, "Screen turned on after ${timeSinceStart}ms, shouldIgnoreScreenOn: $shouldIgnoreScreenOn")
-
-                    if (shouldIgnoreScreenOn && timeSinceStart < 5000) {
-                        Log.d(TAG, "Ignoring screen on event - activity just started")
-                        handler.postDelayed({
-                            shouldIgnoreScreenOn = false
-                            Log.d(TAG, "Now listening for screen on events")
-                        }, 10000 - timeSinceStart)
-                        return
-                    }
-
-                    Log.d(TAG, "Screen turned on, finishing slideshow")
-                    finish()
-                }
-            }
-        }
     }
 
     private val batteryReceiver = object : BroadcastReceiver() {
@@ -88,10 +62,18 @@ class SlideshowActivity : AppCompatActivity() {
         }
     }
 
+    private val exitReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == "com.meerkat.autogallery.EXIT_SLIDESHOW") {
+                Log.d(TAG, "Received exit broadcast - user activity detected")
+                finish()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        startTime = System.currentTimeMillis()
-        Log.d(TAG, "onCreate called at $startTime")
+        Log.d(TAG, "onCreate called")
 
         try {
             setContentView(R.layout.activity_slideshow)
@@ -116,8 +98,8 @@ class SlideshowActivity : AppCompatActivity() {
             }
 
             isActivityActive = true
-            registerScreenStateReceiver()
             registerBatteryReceiver()
+            registerExitReceiver()
             uiManager.showGestureHintsIfNeeded()
 
             handler.postDelayed({
@@ -205,21 +187,6 @@ class SlideshowActivity : AppCompatActivity() {
         }
     }
 
-    private fun registerScreenStateReceiver() {
-        try {
-            val filter = IntentFilter().apply {
-                addAction(Intent.ACTION_SCREEN_ON)
-                addAction(Intent.ACTION_USER_PRESENT)
-            }
-            registerReceiver(screenStateReceiver, filter)
-            isReceiverRegistered = true
-            Log.d(TAG, "Screen state receiver registered")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error registering screen state receiver", e)
-            isReceiverRegistered = false
-        }
-    }
-
     private fun registerBatteryReceiver() {
         try {
             val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
@@ -229,6 +196,18 @@ class SlideshowActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.e(TAG, "Error registering battery receiver", e)
             isBatteryReceiverRegistered = false
+        }
+    }
+
+    private fun registerExitReceiver() {
+        try {
+            val filter = IntentFilter("com.meerkat.autogallery.EXIT_SLIDESHOW")
+            registerReceiver(exitReceiver, filter)
+            isExitReceiverRegistered = true
+            Log.d(TAG, "Exit receiver registered")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error registering exit receiver", e)
+            isExitReceiverRegistered = false
         }
     }
 
@@ -455,19 +434,8 @@ class SlideshowActivity : AppCompatActivity() {
         Log.d(TAG, "onDestroy called")
 
         isActivityActive = false
-        shouldIgnoreScreenOn = false
         handler.removeCallbacksAndMessages(null)
         zoomManager.cleanup()
-
-        if (isReceiverRegistered) {
-            try {
-                unregisterReceiver(screenStateReceiver)
-                isReceiverRegistered = false
-                Log.d(TAG, "Screen state receiver unregistered")
-            } catch (e: Exception) {
-                Log.w(TAG, "Error unregistering screen receiver", e)
-            }
-        }
 
         if (isBatteryReceiverRegistered) {
             try {
@@ -476,6 +444,16 @@ class SlideshowActivity : AppCompatActivity() {
                 Log.d(TAG, "Battery receiver unregistered")
             } catch (e: Exception) {
                 Log.w(TAG, "Error unregistering battery receiver", e)
+            }
+        }
+
+        if (isExitReceiverRegistered) {
+            try {
+                unregisterReceiver(exitReceiver)
+                isExitReceiverRegistered = false
+                Log.d(TAG, "Exit receiver unregistered")
+            } catch (e: Exception) {
+                Log.w(TAG, "Error unregistering exit receiver", e)
             }
         }
     }

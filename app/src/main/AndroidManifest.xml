@@ -2,8 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Storage permissions for reading images -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
+    <!-- System permissions for service operation -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -11,6 +14,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+
     <!-- Battery level monitoring permission -->
     <uses-permission android:name="android.permission.BATTERY_STATS" />
 
@@ -25,6 +29,7 @@
         android:theme="@style/Theme.AutoGallery"
         tools:targetApi="31">
 
+        <!-- Main launcher activity -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -35,13 +40,14 @@
             </intent-filter>
         </activity>
 
+        <!-- Settings configuration activity -->
         <activity
             android:name=".SettingsActivity"
             android:exported="false"
             android:label="@string/settings_title"
             android:parentActivityName=".MainActivity" />
 
-        <!-- Updated slideshow activity with edge-to-edge theme -->
+        <!-- Slideshow activity with fullscreen edge-to-edge theme -->
         <activity
             android:name=".SlideshowActivity"
             android:exported="false"
@@ -51,15 +57,17 @@
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             tools:ignore="LockedOrientationActivity" />
 
+        <!-- Background service for idle detection and slideshow triggering -->
         <service
             android:name=".ScreenStateService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Screen state monitoring for automatic slideshow activation" />
+                android:value="User idle monitoring for automatic slideshow activation" />
         </service>
 
+        <!-- Broadcast receiver for screen state and user activity detection -->
         <receiver
             android:name=".ScreenStateReceiver"
             android:enabled="true"
@@ -71,6 +79,7 @@
             </intent-filter>
         </receiver>
 
+        <!-- Boot receiver to restart service after device reboot -->
         <receiver
             android:name=".BootReceiver"
             android:enabled="true"

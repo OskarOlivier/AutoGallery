@@ -254,6 +254,18 @@ class MainActivity : AppCompatActivity() {
             val photoCount = settings.photoInfoList.size
             val folderInfo = settings.folderInfo
 
+            // Get idle timeout from system settings
+            val screenTimeoutMs = try {
+                android.provider.Settings.System.getLong(
+                    contentResolver,
+                    android.provider.Settings.System.SCREEN_OFF_TIMEOUT,
+                    30000L
+                )
+            } catch (e: Exception) {
+                30000L
+            }
+            val idleTimeoutSeconds = maxOf((screenTimeoutMs - 1000L) / 1000L, 5L).toInt()
+
             val imageCountDetail = if (folderInfo.uri.isNotEmpty() && photoCount > 0) {
                 buildString {
                     append("📁 ${folderInfo.displayName}")
@@ -344,13 +356,13 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     if (availableForCurrentOrientation > 0) {
-                        "Auto Gallery is active - will start on screen timeout"
+                        "Auto Gallery is active - will start after ${idleTimeoutSeconds}s idle"
                     } else {
                         val orientationName = if (currentOrientation == ImageOrientation.LANDSCAPE) "landscape" else "portrait"
                         "No images available for $orientationName mode"
                     }
                 }
-                else -> "Auto Gallery is active - will start on screen timeout"
+                else -> "Auto Gallery is active - will start after ${idleTimeoutSeconds}s idle"
             }
         } catch (e: Exception) {
             Log.e("MainActivity", "Error updating UI", e)
