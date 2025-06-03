@@ -52,7 +52,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var orientationFilteringSwitch: SwitchMaterial
     private lateinit var squareDetectionSlider: Slider
     private lateinit var squareDetectionText: MaterialTextView
-    private lateinit var featheringSwitch: SwitchMaterial
+    private lateinit var featheringSlider: Slider
+    private lateinit var featheringText: MaterialTextView
     private lateinit var slideshowBrightnessSlider: Slider
     private lateinit var slideshowBrightnessText: MaterialTextView
     private lateinit var checkPermissionsButton: MaterialButton
@@ -113,7 +114,8 @@ class SettingsActivity : AppCompatActivity() {
         orientationFilteringSwitch = findViewById(R.id.orientationFilteringSwitch)
         squareDetectionSlider = findViewById(R.id.squareDetectionSlider)
         squareDetectionText = findViewById(R.id.squareDetectionText)
-        featheringSwitch = findViewById(R.id.featheringSwitch)
+        featheringSlider = findViewById(R.id.featheringSlider)
+        featheringText = findViewById(R.id.featheringText)
         slideshowBrightnessSlider = findViewById(R.id.slideshowBrightnessSlider)
         slideshowBrightnessText = findViewById(R.id.slideshowBrightnessText)
         checkPermissionsButton = findViewById(R.id.checkPermissionsButton)
@@ -175,7 +177,10 @@ class SettingsActivity : AppCompatActivity() {
         squareDetectionSlider.value = roundedSquareSensitivity
         updateSquareDetectionText(roundedSquareSensitivity)
 
-        featheringSwitch.isChecked = settings.enableFeathering
+        // Round feathering amount to nearest valid step (5.0)
+        val roundedFeathering = roundToSliderStep(settings.featheringAmount, 0f, 5f)
+        featheringSlider.value = roundedFeathering
+        updateFeatheringText(roundedFeathering)
 
         // Round slideshow brightness to nearest valid step (0.05)
         val roundedBrightness = roundToSliderStep(settings.slideshowBrightness, 0.1f, 0.05f)
@@ -204,6 +209,10 @@ class SettingsActivity : AppCompatActivity() {
             updateSquareDetectionText(value)
         }
 
+        featheringSlider.addOnChangeListener { _, value, _ ->
+            updateFeatheringText(value)
+        }
+
         slideshowBrightnessSlider.addOnChangeListener { _, value, _ ->
             updateSlideshowBrightnessText(value)
         }
@@ -230,6 +239,13 @@ class SettingsActivity : AppCompatActivity() {
             }
         })
 
+        featheringSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                saveCurrentSettings()
+            }
+        })
+
         slideshowBrightnessSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
             override fun onStartTrackingTouch(slider: Slider) {}
             override fun onStopTrackingTouch(slider: Slider) {
@@ -243,7 +259,6 @@ class SettingsActivity : AppCompatActivity() {
             saveCurrentSettings()
             updateOrientationStats()
         }
-        featheringSwitch.setOnCheckedChangeListener { _, _ -> saveCurrentSettings() }
 
         checkPermissionsButton.setOnClickListener {
             requestAllPermissions()
@@ -406,6 +421,15 @@ class SettingsActivity : AppCompatActivity() {
         zoomAmountText.text = "${100 + zoomAmount}% zoom"
     }
 
+    private fun updateFeatheringText(featheringAmount: Float) {
+        val amount = featheringAmount.toInt()
+        featheringText.text = if (amount == 0) {
+            "No feathering"
+        } else {
+            "${amount}px feathering"
+        }
+    }
+
     private fun updateSlideshowBrightnessText(brightness: Float) {
         val percentage = (brightness * 100).toInt()
         slideshowBrightnessText.text = "$percentage% brightness"
@@ -455,7 +479,7 @@ class SettingsActivity : AppCompatActivity() {
             batteryManagementMode = batteryManagementMode,
             enableOrientationFiltering = orientationFilteringSwitch.isChecked,
             squareDetectionSensitivity = squareDetectionSlider.value,
-            enableFeathering = featheringSwitch.isChecked,
+            featheringAmount = featheringSlider.value,
             slideshowBrightness = slideshowBrightnessSlider.value
         )
 

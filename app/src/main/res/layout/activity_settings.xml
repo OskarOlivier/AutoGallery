@@ -264,15 +264,32 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Blurred background for aspect ratio fill"
-                    android:layout_marginBottom="8dp" />
+                    android:layout_marginBottom="16dp" />
 
-                <com.google.android.material.switchmaterial.SwitchMaterial
-                    android:id="@+id/featheringSwitch"
+                <com.google.android.material.textview.MaterialTextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Edge feathering effect"
-                    android:layout_marginBottom="16dp"
-                    android:checked="true" />
+                    android:text="Edge Feathering"
+                    android:textAppearance="?attr/textAppearanceBodyLarge"
+                    android:layout_marginBottom="8dp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/featheringText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="100px feathering"
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:layout_marginBottom="8dp" />
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/featheringSlider"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:valueFrom="0"
+                    android:valueTo="100"
+                    android:value="100"
+                    android:stepSize="5"
+                    android:layout_marginBottom="16dp" />
 
                 <com.google.android.material.textview.MaterialTextView
                     android:layout_width="match_parent"

@@ -106,7 +106,7 @@ class ScreenStateService : Service() {
             )
 
             // Set idle threshold to 1 second before screen timeout
-            idleThresholdMs = maxOf(screenTimeoutMs - 1000L, 5000L) // Minimum 5 seconds
+            idleThresholdMs = maxOf(screenTimeoutMs - 5000L, 5000L) // Minimum 5 seconds
 
             Log.d(TAG, "Screen timeout: ${screenTimeoutMs}ms, Idle threshold: ${idleThresholdMs}ms")
         } catch (e: Exception) {

@@ -167,8 +167,8 @@ class SlideshowActivity : AppCompatActivity() {
 
         // Apply feathering setting to BorderImageViews
         val settings = imageListManager.getSettings()
-        currentImageView.featheringEnabled = settings.enableFeathering
-        nextImageView.featheringEnabled = settings.enableFeathering
+        currentImageView.featheringAmount = settings.featheringAmount
+        nextImageView.featheringAmount = settings.featheringAmount
 
         // Set initial brightness for slideshow
         gestureHandler.setInitialBrightness(settings.slideshowBrightness)
@@ -312,7 +312,7 @@ class SlideshowActivity : AppCompatActivity() {
                 val settings = imageListManager.getSettings()
                 val photoIndex = imageListManager.getCurrentIndex()
 
-                nextImageView.featheringEnabled = settings.enableFeathering
+                nextImageView.featheringAmount = settings.featheringAmount
 
                 zoomManager.setInitialScale(nextImageView, photoIndex, settings)
                 zoomManager.startZoomOnView(nextImageView, photoIndex, settings, isPreTransition = true)
@@ -334,7 +334,7 @@ class SlideshowActivity : AppCompatActivity() {
                 val settings = imageListManager.getSettings()
                 val photoIndex = imageListManager.getCurrentIndex()
 
-                nextImageView.featheringEnabled = settings.enableFeathering
+                nextImageView.featheringAmount = settings.featheringAmount
 
                 zoomManager.setInitialScale(nextImageView, photoIndex, settings)
                 zoomManager.startZoomOnView(nextImageView, photoIndex, settings, isPreTransition = true)
@@ -358,22 +358,22 @@ class SlideshowActivity : AppCompatActivity() {
     private fun updateViewReferences(viewReferences: ImageTransitionManager.ViewReferences) {
         Log.d(TAG, "Updating view references to match transition manager")
 
-        val featheringEnabled = imageListManager.getSettings().enableFeathering
+        val featheringAmount = imageListManager.getSettings().featheringAmount
 
         if (viewReferences.currentImageView is BorderImageView) {
             currentImageView = viewReferences.currentImageView
-            currentImageView.featheringEnabled = featheringEnabled
+            currentImageView.featheringAmount = featheringAmount
         }
 
         if (viewReferences.nextImageView is BorderImageView) {
             nextImageView = viewReferences.nextImageView
-            nextImageView.featheringEnabled = featheringEnabled
+            nextImageView.featheringAmount = featheringAmount
         }
 
         currentBackgroundImageView = viewReferences.currentBackgroundView
         nextBackgroundImageView = viewReferences.nextBackgroundView
 
-        Log.d(TAG, "View references synchronized with feathering enabled: $featheringEnabled")
+        Log.d(TAG, "View references synchronized with feathering amount: ${featheringAmount}px")
     }
 
     private fun scheduleNextImage() {

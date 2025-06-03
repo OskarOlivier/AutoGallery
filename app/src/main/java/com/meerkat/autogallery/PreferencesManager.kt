@@ -24,7 +24,7 @@ class PreferencesManager(context: Context) {
             putString("battery_management_mode", settings.batteryManagementMode.name)
             putBoolean("enable_orientation_filtering", settings.enableOrientationFiltering)
             putFloat("square_detection_sensitivity", settings.squareDetectionSensitivity)
-            putBoolean("enable_feathering", settings.enableFeathering)
+            putFloat("feathering_amount", settings.featheringAmount)
             putFloat("slideshow_brightness", settings.slideshowBrightness)
             apply()
         }
@@ -53,6 +53,15 @@ class PreferencesManager(context: Context) {
             BatteryManagementMode.CHARGING_ONLY
         }
 
+        // Handle migration from old boolean enableFeathering to new float featheringAmount
+        val featheringAmount = if (prefs.contains("feathering_amount")) {
+            prefs.getFloat("feathering_amount", 100f).coerceIn(0f, 100f)
+        } else {
+            // Migrate from old boolean setting
+            val oldFeatheringEnabled = prefs.getBoolean("enable_feathering", true)
+            if (oldFeatheringEnabled) 100f else 0f
+        }
+
         return GallerySettings(
             isEnabled = prefs.getBoolean("is_enabled", false),
             photoInfoList = photoInfoList,
@@ -78,7 +87,7 @@ class PreferencesManager(context: Context) {
             batteryManagementMode = batteryManagementMode,
             enableOrientationFiltering = prefs.getBoolean("enable_orientation_filtering", true),
             squareDetectionSensitivity = prefs.getFloat("square_detection_sensitivity", 0.8f).coerceIn(0.5f, 1.0f),
-            enableFeathering = prefs.getBoolean("enable_feathering", true),
+            featheringAmount = featheringAmount,
             slideshowBrightness = prefs.getFloat("slideshow_brightness", 1.0f).coerceIn(0.0f, 1.0f)
         )
     }

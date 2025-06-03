@@ -1,4 +1,4 @@
-// BorderImageView.kt - Custom ImageView with optional edge fade effect
+// BorderImageView.kt - Custom ImageView with adjustable edge fade effect
 package com.meerkat.autogallery
 
 import android.content.Context
@@ -12,9 +12,8 @@ class BorderImageView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : AppCompatImageView(context, attrs, defStyleAttr) {
 
-    private val fadeWidth = 100f
     private val edgeOverlap = 4f
-    var featheringEnabled = true // Can be set programmatically
+    var featheringAmount = 100f // 0.0f to 100.0f - fade width in pixels
 
     override fun onDraw(canvas: Canvas) {
         val viewWidth = width
@@ -25,7 +24,7 @@ class BorderImageView @JvmOverloads constructor(
             return
         }
 
-        if (!featheringEnabled) {
+        if (featheringAmount <= 0f) {
             super.onDraw(canvas)
             return
         }
@@ -94,7 +93,7 @@ class BorderImageView @JvmOverloads constructor(
         val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG)
         maskPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
 
-        val effectiveFadeWidth = fadeWidth - edgeOverlap
+        val effectiveFadeWidth = featheringAmount - edgeOverlap
 
         // Top edge fade
         if (imageBounds.top > 0) {

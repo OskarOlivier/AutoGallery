@@ -264,7 +264,7 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 30000L
             }
-            val idleTimeoutSeconds = maxOf((screenTimeoutMs - 1000L) / 1000L, 5L).toInt()
+            val idleTimeoutSeconds = maxOf((screenTimeoutMs - 5 000L) / 1000L, 5L).toInt()
 
             val imageCountDetail = if (folderInfo.uri.isNotEmpty() && photoCount > 0) {
                 buildString {

@@ -39,7 +39,7 @@ data class GallerySettings(
     val batteryManagementMode: BatteryManagementMode = BatteryManagementMode.CHARGING_ONLY,
     val enableOrientationFiltering: Boolean = true,
     val squareDetectionSensitivity: Float = 0.8f, // 0.5 = very sensitive (few squares), 1.0 = less sensitive (more squares)
-    val enableFeathering: Boolean = true,
+    val featheringAmount: Float = 100f, // 0.0f (no feathering) to 100.0f (maximum feathering)
     val slideshowBrightness: Float = 1.0f // 0.0f (dim) to 1.0f (full brightness) for slideshow window
 )
 
