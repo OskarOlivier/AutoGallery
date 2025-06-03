@@ -2,6 +2,8 @@
 package com.meerkat.autogallery
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -27,6 +29,12 @@ class SlideshowGestureHandler(
     private var screenHeight = 0
     private var currentBrightness = 1.0f
 
+    // State tracking for gesture conflicts
+    private var isBrightnessControlActive = false
+    private var isNavigationActive = false
+    private var gestureStateResetRunnable: Runnable? = null
+    private val handler = Handler(Looper.getMainLooper())
+
     enum class SwipeDirection {
         LEFT, RIGHT
     }
@@ -38,6 +46,7 @@ class SlideshowGestureHandler(
         private const val GESTURE_DEBOUNCE_TIME = 50L // ms - very responsive
         private const val EDGE_THRESHOLD = 20 // pixels - almost entire screen usable
         private const val BRIGHTNESS_ADJUSTMENT_FACTOR = 0.01f // Brightness change per pixel
+        private const val GESTURE_STATE_RESET_DELAY = 300L // ms - reset gesture state after inactivity
     }
 
     init {
@@ -80,10 +89,13 @@ class SlideshowGestureHandler(
                 val absDeltaY = abs(deltaY)
 
                 Log.v(TAG, "Fling gesture: deltaX=$deltaX, deltaY=$deltaY, velX=$velocityX, velY=$velocityY")
+                Log.v(TAG, "Gesture state: brightness=$isBrightnessControlActive, navigation=$isNavigationActive")
 
-                // ULTRA-LENIENT HORIZONTAL NAVIGATION - prioritize ANY horizontal movement
-                if (absDeltaX > MIN_SWIPE_DISTANCE || abs(velocityX) > MIN_SWIPE_VELOCITY) {
+                // HORIZONTAL NAVIGATION - only if brightness control is not active
+                if (!isBrightnessControlActive && (absDeltaX > MIN_SWIPE_DISTANCE || abs(velocityX) > MIN_SWIPE_VELOCITY)) {
                     // Accept gesture if EITHER distance OR velocity threshold is met
+                    setNavigationActive()
+
                     if (deltaX > 0) {
                         Log.d(TAG, "Swipe right - previous image (deltaX: $deltaX, deltaY: $deltaY)")
                         onNavigateToPrevious(SwipeDirection.RIGHT)
@@ -94,10 +106,12 @@ class SlideshowGestureHandler(
                     return true
                 }
 
-                // ONLY if no horizontal movement, check for vertical brightness control
-                else if (absDeltaY > MIN_SWIPE_DISTANCE && abs(velocityY) > MIN_SWIPE_VELOCITY && absDeltaY > absDeltaX * 2.0f) {
+                // VERTICAL BRIGHTNESS CONTROL - only if navigation is not active
+                else if (!isNavigationActive && absDeltaY > MIN_SWIPE_DISTANCE && abs(velocityY) > MIN_SWIPE_VELOCITY && absDeltaY > absDeltaX * 2.0f) {
                     // Vertical swipe - brightness control (only if clearly more vertical than horizontal)
                     if (!shouldProcessGesture()) return false // Apply debouncing only to brightness
+
+                    setBrightnessControlActive()
 
                     val brightnessChange = deltaY * BRIGHTNESS_ADJUSTMENT_FACTOR
                     val newBrightness = (currentBrightness - brightnessChange).coerceIn(0.0f, 1.0f)
@@ -108,7 +122,13 @@ class SlideshowGestureHandler(
                 }
 
                 else {
-                    Log.v(TAG, "Gesture ignored - insufficient movement (deltaX: $absDeltaX, deltaY: $absDeltaY)")
+                    if (isBrightnessControlActive) {
+                        Log.v(TAG, "Horizontal navigation ignored - brightness control active")
+                    } else if (isNavigationActive) {
+                        Log.v(TAG, "Brightness control ignored - navigation active")
+                    } else {
+                        Log.v(TAG, "Gesture ignored - insufficient movement (deltaX: $absDeltaX, deltaY: $absDeltaY)")
+                    }
                     return false
                 }
             }
@@ -128,11 +148,13 @@ class SlideshowGestureHandler(
                     val absTotalDeltaX = abs(totalDeltaX)
                     val absTotalDeltaY = abs(totalDeltaY)
 
-                    // VERY restrictive criteria for brightness scrolling to avoid interfering with navigation
-                    // Only activate if it's overwhelmingly vertical AND has significant movement
+                    // BRIGHTNESS SCROLLING - only if navigation is not active
+                    // Very restrictive criteria to avoid interfering with navigation
                     val isOverwhelminglyVertical = absTotalDeltaY > absTotalDeltaX * 3.0f && absTotalDeltaY > 60 && absTotalDeltaX < 30
 
-                    if (isOverwhelminglyVertical) {
+                    if (!isNavigationActive && isOverwhelminglyVertical) {
+                        setBrightnessControlActive()
+
                         val brightnessChange = distanceY * BRIGHTNESS_ADJUSTMENT_FACTOR
                         val newBrightness = (currentBrightness + brightnessChange).coerceIn(0.0f, 1.0f)
 
@@ -218,4 +240,44 @@ class SlideshowGestureHandler(
     }
 
     fun getCurrentBrightness(): Float = currentBrightness
+
+    private fun setNavigationActive() {
+        isNavigationActive = true
+        isBrightnessControlActive = false
+        scheduleGestureStateReset()
+        Log.v(TAG, "Navigation active - brightness control disabled")
+    }
+
+    private fun setBrightnessControlActive() {
+        isBrightnessControlActive = true
+        isNavigationActive = false
+        scheduleGestureStateReset()
+        Log.v(TAG, "Brightness control active - navigation disabled")
+    }
+
+    private fun scheduleGestureStateReset() {
+        gestureStateResetRunnable?.let { runnable ->
+            handler.removeCallbacks(runnable)
+        }
+
+        gestureStateResetRunnable = Runnable {
+            resetGestureState()
+        }.also { runnable ->
+            handler.postDelayed(runnable, GESTURE_STATE_RESET_DELAY)
+        }
+    }
+
+    private fun resetGestureState() {
+        isBrightnessControlActive = false
+        isNavigationActive = false
+        gestureStateResetRunnable = null
+        Log.v(TAG, "Gesture state reset - both controls available")
+    }
+
+    fun cleanup() {
+        gestureStateResetRunnable?.let { runnable ->
+            handler.removeCallbacks(runnable)
+        }
+        resetGestureState()
+    }
 }
