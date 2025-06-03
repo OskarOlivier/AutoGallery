@@ -33,11 +33,11 @@ class SlideshowGestureHandler(
 
     companion object {
         private const val TAG = "SlideshowGestureHandler"
-        private const val MIN_SWIPE_DISTANCE = 100 // pixels
-        private const val MIN_SWIPE_VELOCITY = 800 // pixels per second
-        private const val GESTURE_DEBOUNCE_TIME = 200L // ms
-        private const val EDGE_THRESHOLD = 50 // pixels
-        private const val BRIGHTNESS_ADJUSTMENT_FACTOR = 0.01f // Brightness change per pixel (5x more sensitive)
+        private const val MIN_SWIPE_DISTANCE = 40 // pixels - very gentle swipes
+        private const val MIN_SWIPE_VELOCITY = 100 // pixels per second - very slow swipes work
+        private const val GESTURE_DEBOUNCE_TIME = 50L // ms - very responsive
+        private const val EDGE_THRESHOLD = 20 // pixels - almost entire screen usable
+        private const val BRIGHTNESS_ADJUSTMENT_FACTOR = 0.01f // Brightness change per pixel
     }
 
     init {
@@ -70,50 +70,47 @@ class SlideshowGestureHandler(
                 velocityX: Float,
                 velocityY: Float
             ): Boolean {
-                if (!shouldProcessGesture() || !isValidGesture(e1, e2)) return false
+                // Skip debouncing for navigation - allow rapid swipes
+                if (e1 == null || !isValidGesture(e1, e2)) return false
 
-                e1?.let { startEvent ->
-                    val deltaX = e2.x - startEvent.x
-                    val deltaY = e2.y - startEvent.y
+                val deltaX = e2.x - e1.x
+                val deltaY = e2.y - e1.y
 
-                    // Determine if this is primarily horizontal or vertical
-                    val isHorizontal = abs(deltaX) > abs(deltaY)
-                    val isVertical = abs(deltaY) > abs(deltaX)
+                val absDeltaX = abs(deltaX)
+                val absDeltaY = abs(deltaY)
 
-                    when {
-                        isHorizontal && abs(deltaX) > MIN_SWIPE_DISTANCE && abs(velocityX) > MIN_SWIPE_VELOCITY -> {
-                            // Horizontal swipe - navigation
-                            if (deltaX > 0) {
-                                // Swipe right - go to previous image with slide right animation
-                                Log.d(TAG, "Swipe right - previous image with slide right")
-                                onNavigateToPrevious(SwipeDirection.RIGHT)
-                            } else {
-                                // Swipe left - go to next image with slide left animation
-                                Log.d(TAG, "Swipe left - next image with slide left")
-                                onNavigateToNext(SwipeDirection.LEFT)
-                            }
-                            return true
-                        }
+                Log.v(TAG, "Fling gesture: deltaX=$deltaX, deltaY=$deltaY, velX=$velocityX, velY=$velocityY")
 
-                        isVertical && abs(deltaY) > MIN_SWIPE_DISTANCE && abs(velocityY) > MIN_SWIPE_VELOCITY -> {
-                            // Vertical swipe - brightness control
-                            val brightnessChange = deltaY * BRIGHTNESS_ADJUSTMENT_FACTOR // Swipe down (positive deltaY) increases brightness, swipe up (negative deltaY) decreases brightness
-                            val newBrightness = (currentBrightness - brightnessChange).coerceIn(0.0f, 1.0f)
-
-                            Log.d(TAG, "Vertical swipe - brightness ${currentBrightness * 100}% -> ${newBrightness * 100}%")
-                            setBrightness(newBrightness)
-                            return true
-                        }
-
-                        else -> {
-                            // Diagonal or insufficient distance/velocity - ignore
-                            Log.v(TAG, "Gesture ignored - diagonal or insufficient: deltaX=$deltaX, deltaY=$deltaY, velX=$velocityX, velY=$velocityY")
-                            return false
-                        }
+                // ULTRA-LENIENT HORIZONTAL NAVIGATION - prioritize ANY horizontal movement
+                if (absDeltaX > MIN_SWIPE_DISTANCE || abs(velocityX) > MIN_SWIPE_VELOCITY) {
+                    // Accept gesture if EITHER distance OR velocity threshold is met
+                    if (deltaX > 0) {
+                        Log.d(TAG, "Swipe right - previous image (deltaX: $deltaX, deltaY: $deltaY)")
+                        onNavigateToPrevious(SwipeDirection.RIGHT)
+                    } else {
+                        Log.d(TAG, "Swipe left - next image (deltaX: $deltaX, deltaY: $deltaY)")
+                        onNavigateToNext(SwipeDirection.LEFT)
                     }
-                } ?: return false
+                    return true
+                }
 
-                return false
+                // ONLY if no horizontal movement, check for vertical brightness control
+                else if (absDeltaY > MIN_SWIPE_DISTANCE && abs(velocityY) > MIN_SWIPE_VELOCITY && absDeltaY > absDeltaX * 2.0f) {
+                    // Vertical swipe - brightness control (only if clearly more vertical than horizontal)
+                    if (!shouldProcessGesture()) return false // Apply debouncing only to brightness
+
+                    val brightnessChange = deltaY * BRIGHTNESS_ADJUSTMENT_FACTOR
+                    val newBrightness = (currentBrightness - brightnessChange).coerceIn(0.0f, 1.0f)
+
+                    Log.d(TAG, "Vertical swipe - brightness ${(currentBrightness * 100).toInt()}% -> ${(newBrightness * 100).toInt()}%")
+                    setBrightness(newBrightness)
+                    return true
+                }
+
+                else {
+                    Log.v(TAG, "Gesture ignored - insufficient movement (deltaX: $absDeltaX, deltaY: $absDeltaY)")
+                    return false
+                }
             }
 
             override fun onScroll(
@@ -128,9 +125,15 @@ class SlideshowGestureHandler(
                     val totalDeltaX = e2.x - startEvent.x
                     val totalDeltaY = e2.y - startEvent.y
 
-                    // Only handle vertical scrolling for brightness if it's predominantly vertical
-                    if (abs(totalDeltaY) > abs(totalDeltaX) && abs(totalDeltaY) > 20) {
-                        val brightnessChange = distanceY * BRIGHTNESS_ADJUSTMENT_FACTOR // distanceY is positive when scrolling up
+                    val absTotalDeltaX = abs(totalDeltaX)
+                    val absTotalDeltaY = abs(totalDeltaY)
+
+                    // VERY restrictive criteria for brightness scrolling to avoid interfering with navigation
+                    // Only activate if it's overwhelmingly vertical AND has significant movement
+                    val isOverwhelminglyVertical = absTotalDeltaY > absTotalDeltaX * 3.0f && absTotalDeltaY > 60 && absTotalDeltaX < 30
+
+                    if (isOverwhelminglyVertical) {
+                        val brightnessChange = distanceY * BRIGHTNESS_ADJUSTMENT_FACTOR
                         val newBrightness = (currentBrightness + brightnessChange).coerceIn(0.0f, 1.0f)
 
                         setBrightness(newBrightness)
@@ -138,6 +141,7 @@ class SlideshowGestureHandler(
                     }
                 }
 
+                // Return false for ALL other cases to ensure fling detection works properly
                 return false
             }
         }
@@ -190,12 +194,12 @@ class SlideshowGestureHandler(
     private fun isValidGesture(e1: MotionEvent?, e2: MotionEvent): Boolean {
         if (e1 == null) return false
 
-        // Ignore touches near screen edges (accidental touches)
+        // Very minimal edge detection - allow almost entire screen
         if (e1.x < EDGE_THRESHOLD || e1.x > screenWidth - EDGE_THRESHOLD) return false
 
-        // Ignore very short gestures (likely accidental)
+        // Accept almost any gesture timing
         val deltaTime = e2.eventTime - e1.eventTime
-        if (deltaTime < 100) return false
+        if (deltaTime < 10) return false // Only reject extremely fast accidental touches
 
         return true
     }

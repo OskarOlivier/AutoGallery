@@ -21,7 +21,7 @@ class SlideshowUIManager(
 
     companion object {
         private const val TAG = "SlideshowUIManager"
-        private const val BRIGHTNESS_INDICATOR_DURATION = 2500L // 2.5 seconds
+        private const val BRIGHTNESS_INDICATOR_DURATION = 1250L // 1.25 seconds
     }
 
     private var brightnessIndicatorRunnable: Runnable? = null
@@ -81,18 +81,29 @@ class SlideshowUIManager(
     fun showBrightnessIndicator(brightness: Float) {
         val clampedBrightness = brightness.coerceIn(0.0f, 1.0f)
 
-        // Update the circular progress
+        // Always update the circular progress
         brightnessIndicator.setBrightnessProgress(clampedBrightness)
 
-        // Show the indicator
-        brightnessIndicator.visibility = View.VISIBLE
-        brightnessIndicator.alpha = 0f
-        brightnessIndicator.animate()
-            .alpha(0.9f)
-            .setDuration(200)
-            .start()
+        // Check if indicator is already visible to avoid flickering
+        val wasVisible = brightnessIndicator.visibility == View.VISIBLE && brightnessIndicator.alpha > 0.1f
 
-        // Cancel any existing hide runnable
+        if (!wasVisible) {
+            // Show the indicator with fade-in animation only if it wasn't already visible
+            brightnessIndicator.visibility = View.VISIBLE
+            brightnessIndicator.alpha = 0f
+            brightnessIndicator.animate()
+                .alpha(0.9f)
+                .setDuration(200)
+                .start()
+
+            Log.d(TAG, "Brightness indicator shown with fade-in: ${(clampedBrightness * 100).toInt()}%")
+        } else {
+            // Just ensure it's at full opacity if it was already visible
+            brightnessIndicator.alpha = 0.9f
+            Log.v(TAG, "Brightness indicator updated: ${(clampedBrightness * 100).toInt()}%")
+        }
+
+        // Always cancel any existing hide runnable and reschedule
         brightnessIndicatorRunnable?.let {
             brightnessIndicator.removeCallbacks(it)
         }
@@ -103,8 +114,6 @@ class SlideshowUIManager(
         }.also { runnable ->
             brightnessIndicator.postDelayed(runnable, BRIGHTNESS_INDICATOR_DURATION)
         }
-
-        Log.d(TAG, "Brightness indicator shown: ${(clampedBrightness * 100).toInt()}%")
     }
 
     fun hideBrightnessIndicator() {
