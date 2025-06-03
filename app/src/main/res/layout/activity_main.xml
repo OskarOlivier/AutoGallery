@@ -22,7 +22,7 @@
             <com.google.android.material.textview.MaterialTextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Auto Gallery"
+                android:text="SlumberSlide"
                 android:textSize="24sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="8dp" />
@@ -30,7 +30,7 @@
             <com.google.android.material.textview.MaterialTextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Folder-Based Gallery"
+                android:text="Folder-Based Slideshow"
                 android:textSize="14sp"
                 android:textAppearance="?attr/textAppearanceBodyMedium"
                 android:layout_marginBottom="16dp" />
@@ -39,7 +39,7 @@
                 android:id="@+id/enableSwitch"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Enable Auto Gallery"
+                android:text="Enable SlumberSlide"
                 android:textSize="16sp"
                 android:layout_marginBottom="12dp" />
 
@@ -47,7 +47,7 @@
                 android:id="@+id/statusText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Auto Gallery is disabled"
+                android:text="SlumberSlide is disabled"
                 android:textSize="14sp"
                 android:textAppearance="?attr/textAppearanceBodyMedium" />
 

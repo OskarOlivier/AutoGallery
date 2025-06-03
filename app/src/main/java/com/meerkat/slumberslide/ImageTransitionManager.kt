@@ -1,5 +1,5 @@
 // ImageTransitionManager.kt - Updated for BorderImageView compatibility
-package com.meerkat.autogallery
+package com.meerkat.slumberslide
 
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
@@ -44,7 +44,7 @@ class ImageTransitionManager(
     }
 
     fun performTransition(
-        settings: GallerySettings,
+        settings: SlideshowSettings,
         photoIndex: Int,
         fastTransition: Boolean = false,
         swipeDirection: SlideshowGestureHandler.SwipeDirection? = null,
@@ -114,7 +114,7 @@ class ImageTransitionManager(
     }
 
     private fun handleFirstImage(
-        settings: GallerySettings,
+        settings: SlideshowSettings,
         photoIndex: Int,
         onComplete: (ViewReferences) -> Unit
     ) {
@@ -130,7 +130,7 @@ class ImageTransitionManager(
         onComplete(getCurrentViewReferences())
     }
 
-    private fun createFadeTransition(settings: GallerySettings, photoIndex: Int, duration: Long): AnimatorSet {
+    private fun createFadeTransition(settings: SlideshowSettings, photoIndex: Int, duration: Long): AnimatorSet {
         val imageFadeOut = ObjectAnimator.ofFloat(currentImageView, "alpha", 1f, 0f)
         val imageFadeIn = ObjectAnimator.ofFloat(nextImageView, "alpha", 0f, 1f)
         val backgroundFadeOut = ObjectAnimator.ofFloat(currentBackgroundImageView, "alpha", 1f, 0f)
@@ -167,7 +167,7 @@ class ImageTransitionManager(
 
     private fun createSlideTransition(
         direction: SlideDirection,
-        settings: GallerySettings,
+        settings: SlideshowSettings,
         photoIndex: Int,
         duration: Long
     ): AnimatorSet {
@@ -227,7 +227,7 @@ class ImageTransitionManager(
         return animatorSet
     }
 
-    private fun startZoomIfNeeded(settings: GallerySettings, photoIndex: Int) {
+    private fun startZoomIfNeeded(settings: SlideshowSettings, photoIndex: Int) {
         when (settings.zoomType) {
             ZoomType.SAWTOOTH -> {
                 Log.d(TAG, "Starting SAWTOOTH zoom at transition start")
@@ -324,7 +324,7 @@ class ImageTransitionManager(
         }
     }
 
-    private fun completeSlideTransition(settings: GallerySettings) {
+    private fun completeSlideTransition(settings: SlideshowSettings) {
         Log.d(TAG, "Completing slide transition with BorderImageView fade effect")
 
         swapImageViews()

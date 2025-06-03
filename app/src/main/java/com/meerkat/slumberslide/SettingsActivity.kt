@@ -1,5 +1,5 @@
 // SettingsActivity.kt
-package com.meerkat.autogallery
+package com.meerkat.slumberslide
 
 import android.Manifest
 import android.content.Intent
@@ -30,7 +30,7 @@ import kotlin.math.round
 class SettingsActivity : AppCompatActivity() {
 
     private lateinit var preferencesManager: PreferencesManager
-    private lateinit var settings: GallerySettings
+    private lateinit var settings: SlideshowSettings
     private lateinit var folderScanner: FolderScanner
 
     private lateinit var selectFolderButton: MaterialButton
@@ -79,7 +79,7 @@ class SettingsActivity : AppCompatActivity() {
         setContentView(R.layout.activity_settings)
 
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        supportActionBar?.title = "Auto Gallery Settings"
+        supportActionBar?.title = "SlumberSlide Settings"
 
         preferencesManager = PreferencesManager(this)
         folderScanner = FolderScanner(this)
@@ -576,7 +576,7 @@ class SettingsActivity : AppCompatActivity() {
         if (Settings.canDrawOverlays(this)) {
             requestAllPermissions()
         } else {
-            Toast.makeText(this, "Overlay permission is required for Auto Gallery to work", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Overlay permission is required for SlumberSlide to work", Toast.LENGTH_LONG).show()
         }
     }
 

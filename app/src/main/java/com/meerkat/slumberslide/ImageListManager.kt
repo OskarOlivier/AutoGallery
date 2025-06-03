@@ -1,5 +1,5 @@
 // ImageListManager.kt - Handles photo filtering, sorting, and navigation
-package com.meerkat.autogallery
+package com.meerkat.slumberslide
 
 import android.content.Context
 import android.net.Uri
@@ -11,7 +11,7 @@ class ImageListManager(
     private val preferencesManager: PreferencesManager
 ) {
 
-    private lateinit var settings: GallerySettings
+    private lateinit var settings: SlideshowSettings
     private var allPhotoList = mutableListOf<PhotoInfo>()
     private var currentPhotoList = mutableListOf<PhotoInfo>()
     private var currentPhotoIndex = 0
@@ -154,5 +154,5 @@ class ImageListManager(
 
     fun getCurrentIndex(): Int = currentPhotoIndex
 
-    fun getSettings(): GallerySettings = settings
+    fun getSettings(): SlideshowSettings = settings
 }

@@ -1,5 +1,5 @@
 // SlideshowZoomManager.kt - Zoom animation management with duration cap
-package com.meerkat.autogallery
+package com.meerkat.slumberslide
 
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
@@ -16,7 +16,7 @@ class SlideshowZoomManager {
         private const val MAX_ZOOM_DURATION_MS = 15000L // 15 seconds maximum zoom duration
     }
 
-    fun setInitialScale(imageView: ImageView, photoIndex: Int, settings: GallerySettings) {
+    fun setInitialScale(imageView: ImageView, photoIndex: Int, settings: SlideshowSettings) {
         val zoomScale = 1.0f + (settings.zoomAmount / 100f)
 
         val initialScale = when (settings.zoomType) {
@@ -34,7 +34,7 @@ class SlideshowZoomManager {
         imageView.scaleY = initialScale
     }
 
-    fun startZoomOnView(imageView: ImageView, photoIndex: Int, settings: GallerySettings, isPreTransition: Boolean = false) {
+    fun startZoomOnView(imageView: ImageView, photoIndex: Int, settings: SlideshowSettings, isPreTransition: Boolean = false) {
         if (isPaused) {
             return
         }
@@ -59,7 +59,7 @@ class SlideshowZoomManager {
         }
     }
 
-    private fun startSawtoothZoom(imageView: ImageView, photoIndex: Int, settings: GallerySettings) {
+    private fun startSawtoothZoom(imageView: ImageView, photoIndex: Int, settings: SlideshowSettings) {
         currentZoomAnimatorSet?.cancel()
 
         val startScale = 1.0f
@@ -70,7 +70,7 @@ class SlideshowZoomManager {
         startZoomAnimation(imageView, startScale, endScale, cappedDuration)
     }
 
-    private fun startSinewaveZoom(imageView: ImageView, photoIndex: Int, settings: GallerySettings) {
+    private fun startSinewaveZoom(imageView: ImageView, photoIndex: Int, settings: SlideshowSettings) {
         currentZoomAnimatorSet?.cancel()
 
         val baseScale = 1.0f
@@ -112,7 +112,7 @@ class SlideshowZoomManager {
         isPaused = true
     }
 
-    fun resumeZoom(imageView: ImageView, photoIndex: Int, settings: GallerySettings) {
+    fun resumeZoom(imageView: ImageView, photoIndex: Int, settings: SlideshowSettings) {
         isPaused = false
     }
 

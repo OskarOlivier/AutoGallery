@@ -1,5 +1,5 @@
 // BorderImageView.kt - Custom ImageView with adjustable edge fade effect
-package com.meerkat.autogallery
+package com.meerkat.slumberslide
 
 import android.content.Context
 import android.graphics.*

@@ -1,24 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Base application theme - let Material3 handle most colors -->
-    <style name="Theme.AutoGallery" parent="Theme.Material3.DayNight">
+    <style name="Theme.SlumberSlide" parent="Theme.Material3.DayNight">
         <!-- Only override primary color, let Material3 generate the rest -->
         <item name="colorPrimary">@color/primary_color</item>
     </style>
 
-    <style name="Theme.AutoGallery.NoActionBar">
+    <style name="Theme.SlumberSlide.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
     </style>
 
-    <style name="Theme.AutoGallery.Fullscreen" parent="Theme.AutoGallery.NoActionBar">
+    <style name="Theme.SlumberSlide.Fullscreen" parent="Theme.SlumberSlide.NoActionBar">
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowContentOverlay">@null</item>
         <item name="android:windowBackground">@color/black</item>
     </style>
 
     <!-- Enhanced fullscreen theme with edge-to-edge support for Android 14+ -->
-    <style name="Theme.AutoGallery.Fullscreen.EdgeToEdge" parent="Theme.AutoGallery.Fullscreen">
+    <style name="Theme.SlumberSlide.Fullscreen.EdgeToEdge" parent="Theme.SlumberSlide.Fullscreen">
         <!-- Transparent system bars for edge-to-edge -->
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>

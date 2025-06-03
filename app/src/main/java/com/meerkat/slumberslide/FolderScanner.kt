@@ -1,5 +1,5 @@
 // FolderScanner.kt - Handles SAF folder scanning and image analysis
-package com.meerkat.autogallery
+package com.meerkat.slumberslide
 
 import android.content.Context
 import android.graphics.BitmapFactory

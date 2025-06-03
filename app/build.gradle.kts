@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.meerkat.autogallery"
+    namespace = "com.meerkat.slumberslide"
     compileSdk = 36  // Updated to 36 as recommended
 
     defaultConfig {
-        applicationId = "com.meerkat.autogallery"
+        applicationId = "com.meerkat.slumberslide"
         minSdk = 29  // Android 10 (API 29)
         targetSdk = 36  // Updated to match compileSdk
         versionCode = 1

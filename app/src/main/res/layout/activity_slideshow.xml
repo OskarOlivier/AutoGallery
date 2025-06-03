@@ -25,14 +25,14 @@
         android:contentDescription="Next background image" />
 
     <!-- Main image views for the slideshow -->
-    <com.meerkat.autogallery.BorderImageView
+    <com.meerkat.slumberslide.BorderImageView
         android:id="@+id/currentImageView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:scaleType="centerInside"
         android:contentDescription="Current slideshow image" />
 
-    <com.meerkat.autogallery.BorderImageView
+    <com.meerkat.slumberslide.BorderImageView
         android:id="@+id/nextImageView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -73,7 +73,7 @@
     </LinearLayout>
 
     <!-- Brightness indicator - centered overlay with circular progress -->
-    <com.meerkat.autogallery.CircularBrightnessIndicator
+    <com.meerkat.slumberslide.CircularBrightnessIndicator
         android:id="@+id/brightnessIndicator"
         android:layout_width="80dp"
         android:layout_height="80dp"
@@ -90,7 +90,7 @@
             android:src="@drawable/ic_brightness"
             android:contentDescription="Brightness control" />
 
-    </com.meerkat.autogallery.CircularBrightnessIndicator>
+    </com.meerkat.slumberslide.CircularBrightnessIndicator>
 
     <!-- Gesture hints for first-time users -->
     <LinearLayout

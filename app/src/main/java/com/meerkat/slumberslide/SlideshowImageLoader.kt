@@ -1,5 +1,5 @@
 // SlideshowImageLoader.kt - Image loading and background processing
-package com.meerkat.autogallery
+package com.meerkat.slumberslide
 
 import android.content.Context
 import android.graphics.Bitmap

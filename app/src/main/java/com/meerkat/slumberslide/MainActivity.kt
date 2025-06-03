@@ -1,5 +1,5 @@
 // MainActivity.kt
-package com.meerkat.autogallery
+package com.meerkat.slumberslide
 
 import android.Manifest
 import android.content.BroadcastReceiver
@@ -51,7 +51,7 @@ class MainActivity : AppCompatActivity() {
         if (allGranted) {
             setupService()
         } else {
-            Toast.makeText(this, "Permissions required for Auto Gallery to work", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Permissions required for SlumberSlide to work", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -61,7 +61,7 @@ class MainActivity : AppCompatActivity() {
         if (Settings.canDrawOverlays(this)) {
             checkAndRequestPermissions()
         } else {
-            Toast.makeText(this, "Overlay permission required for Auto Gallery", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Overlay permission required for SlumberSlide", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -233,7 +233,7 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 
-    private fun getPortraitModeImageCount(settings: GallerySettings): Int {
+    private fun getPortraitModeImageCount(settings: SlideshowSettings): Int {
         return if (settings.enableOrientationFiltering) {
             settings.photoInfoList.count { photoInfo ->
                 OrientationUtils.shouldShowImage(
@@ -264,7 +264,7 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 30000L
             }
-            val idleTimeoutSeconds = maxOf((screenTimeoutMs - 5 000L) / 1000L, 5L).toInt()
+            val idleTimeoutSeconds = maxOf((screenTimeoutMs - 5000L) / 1000L, 5L).toInt()
 
             val imageCountDetail = if (folderInfo.uri.isNotEmpty() && photoCount > 0) {
                 buildString {
@@ -329,7 +329,7 @@ class MainActivity : AppCompatActivity() {
             photoCountText.text = imageCountDetail
 
             statusText.text = when {
-                !settings.isEnabled -> "Auto Gallery is disabled"
+                !settings.isEnabled -> "SlumberSlide is disabled"
                 folderInfo.uri.isEmpty() -> "Please select a folder in Settings"
                 !canStartSlideshowBasedOnBattery(settings.batteryManagementMode) -> {
                     when (settings.batteryManagementMode) {
@@ -356,13 +356,13 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     if (availableForCurrentOrientation > 0) {
-                        "Auto Gallery is active - will start after ${idleTimeoutSeconds}s idle"
+                        "SlumberSlide is active - will start after ${idleTimeoutSeconds}s idle"
                     } else {
                         val orientationName = if (currentOrientation == ImageOrientation.LANDSCAPE) "landscape" else "portrait"
                         "No images available for $orientationName mode"
                     }
                 }
-                else -> "Auto Gallery is active - will start after ${idleTimeoutSeconds}s idle"
+                else -> "SlumberSlide is active - will start after ${idleTimeoutSeconds}s idle"
             }
         } catch (e: Exception) {
             Log.e("MainActivity", "Error updating UI", e)

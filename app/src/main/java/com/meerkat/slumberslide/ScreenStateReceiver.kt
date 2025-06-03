@@ -1,5 +1,5 @@
 // ScreenStateReceiver.kt
-package com.meerkat.autogallery
+package com.meerkat.slumberslide
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -17,7 +17,7 @@ class ScreenStateReceiver : BroadcastReceiver() {
         val settings = preferencesManager.loadSettings()
 
         if (!settings.isEnabled) {
-            Log.d(TAG, "Auto Gallery disabled, ignoring screen state change")
+            Log.d(TAG, "SlumberSlide disabled, ignoring screen state change")
             return
         }
 
@@ -40,7 +40,7 @@ class ScreenStateReceiver : BroadcastReceiver() {
                     }
 
                     // Send broadcast to slideshow if it's running
-                    val exitIntent = Intent("com.meerkat.autogallery.EXIT_SLIDESHOW")
+                    val exitIntent = Intent("com.meerkat.slumberslide.EXIT_SLIDESHOW")
                     context.sendBroadcast(exitIntent)
 
                 } catch (e: Exception) {

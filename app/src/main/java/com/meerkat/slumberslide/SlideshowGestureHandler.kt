@@ -1,5 +1,5 @@
 // SlideshowGestureHandler.kt - Enhanced gesture handling with swipe-to-slide mapping and brightness control
-package com.meerkat.autogallery
+package com.meerkat.slumberslide
 
 import android.content.Context
 import android.os.Handler

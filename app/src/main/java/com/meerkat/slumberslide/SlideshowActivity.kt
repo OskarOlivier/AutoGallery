@@ -1,5 +1,5 @@
 // SlideshowActivity.kt - Updated with idle-based triggering and improved battery management
-package com.meerkat.autogallery
+package com.meerkat.slumberslide
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -65,7 +65,7 @@ class SlideshowActivity : AppCompatActivity() {
 
     private val exitReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == "com.meerkat.autogallery.EXIT_SLIDESHOW") {
+            if (intent?.action == "com.meerkat.slumberslide.EXIT_SLIDESHOW") {
                 Log.d(TAG, "Received exit broadcast - user activity detected")
                 finish()
             }
@@ -208,7 +208,7 @@ class SlideshowActivity : AppCompatActivity() {
 
     private fun registerExitReceiver() {
         try {
-            val filter = IntentFilter("com.meerkat.autogallery.EXIT_SLIDESHOW")
+            val filter = IntentFilter("com.meerkat.slumberslide.EXIT_SLIDESHOW")
             registerReceiver(exitReceiver, filter)
             isExitReceiverRegistered = true
             Log.d(TAG, "Exit receiver registered")

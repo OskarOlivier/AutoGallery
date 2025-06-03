@@ -1,5 +1,5 @@
 // CircularBrightnessIndicator.kt - Custom view for circular brightness progress indicator
-package com.meerkat.autogallery
+package com.meerkat.slumberslide
 
 import android.content.Context
 import android.graphics.*

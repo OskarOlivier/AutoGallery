@@ -1,5 +1,5 @@
 // ScreenStateService.kt
-package com.meerkat.autogallery
+package com.meerkat.slumberslide
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -36,7 +36,7 @@ class ScreenStateService : Service() {
 
     companion object {
         private const val TAG = "ScreenStateService"
-        private const val CHANNEL_ID = "auto_gallery_service"
+        private const val CHANNEL_ID = "slumber_slide_service"
         private const val NOTIFICATION_ID = 1001
         private const val MIN_BATTERY_LEVEL = 20
         private const val IDLE_CHECK_INTERVAL = 2000L // Check every 2 seconds
@@ -292,10 +292,10 @@ class ScreenStateService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Auto Gallery Service",
+                "SlumberSlide Service",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Keeps Auto Gallery running in background"
+                description = "Keeps SlumberSlide running in background"
                 setSound(null, null)
                 enableVibration(false)
             }
@@ -346,7 +346,7 @@ class ScreenStateService : Service() {
         val idleTimeoutText = "Idle timeout: ${idleThresholdMs / 1000}s"
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Auto Gallery")
+            .setContentTitle("SlumberSlide")
             .setContentText("$folderStatus • $batteryStatus")
             .setSubText(idleTimeoutText)
             .setSmallIcon(R.drawable.ic_photo_library)

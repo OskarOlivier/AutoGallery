@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Auto Gallery"
+rootProject.name = "SlumberSlide"
 include(":app")

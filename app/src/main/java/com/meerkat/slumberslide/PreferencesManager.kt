@@ -1,5 +1,5 @@
 // PreferencesManager.kt
-package com.meerkat.autogallery
+package com.meerkat.slumberslide
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -8,9 +8,9 @@ import org.json.JSONObject
 
 class PreferencesManager(context: Context) {
     private val prefs: SharedPreferences =
-        context.getSharedPreferences("auto_gallery_prefs", Context.MODE_PRIVATE)
+        context.getSharedPreferences("slumber_slide_prefs", Context.MODE_PRIVATE)
 
-    fun saveSettings(settings: GallerySettings) {
+    fun saveSettings(settings: SlideshowSettings) {
         prefs.edit().apply {
             putBoolean("is_enabled", settings.isEnabled)
             putString("folder_info", folderInfoToJson(settings.folderInfo))
@@ -30,7 +30,7 @@ class PreferencesManager(context: Context) {
         }
     }
 
-    fun loadSettings(): GallerySettings {
+    fun loadSettings(): SlideshowSettings {
         val folderInfoJson = prefs.getString("folder_info", null)
         val folderInfo = if (folderInfoJson != null) {
             folderInfoFromJson(folderInfoJson)
@@ -62,7 +62,7 @@ class PreferencesManager(context: Context) {
             if (oldFeatheringEnabled) 100f else 0f
         }
 
-        return GallerySettings(
+        return SlideshowSettings(
             isEnabled = prefs.getBoolean("is_enabled", false),
             photoInfoList = photoInfoList,
             folderInfo = folderInfo,

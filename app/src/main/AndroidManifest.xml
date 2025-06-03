@@ -26,14 +26,14 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AutoGallery"
+        android:theme="@style/Theme.SlumberSlide"
         tools:targetApi="31">
 
         <!-- Main launcher activity -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.AutoGallery.NoActionBar">
+            android:theme="@style/Theme.SlumberSlide.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -51,7 +51,7 @@
         <activity
             android:name=".SlideshowActivity"
             android:exported="false"
-            android:theme="@style/Theme.AutoGallery.Fullscreen.EdgeToEdge"
+            android:theme="@style/Theme.SlumberSlide.Fullscreen.EdgeToEdge"
             android:launchMode="singleTask"
             android:screenOrientation="unspecified"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"

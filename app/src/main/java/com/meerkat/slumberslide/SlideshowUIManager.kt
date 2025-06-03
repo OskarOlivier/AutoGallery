@@ -1,5 +1,5 @@
 // SlideshowUIManager.kt - Handles UI state and fullscreen functionality
-package com.meerkat.autogallery
+package com.meerkat.slumberslide
 
 import android.app.Activity
 import android.content.Context

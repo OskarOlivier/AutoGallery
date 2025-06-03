@@ -1,5 +1,5 @@
 // BootReceiver.kt
-package com.meerkat.autogallery
+package com.meerkat.slumberslide
 
 import android.content.BroadcastReceiver
 import android.content.Context

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Auto Gallery</string>
+    <string name="app_name">SlumberSlide</string>
     <string name="settings_title">Settings</string>
-    <string name="enable_auto_gallery">Enable Auto Gallery</string>
+    <string name="enable_slumber_slide">Enable SlumberSlide</string>
     <string name="select_photos">Select Photos</string>
     <string name="slide_duration">Slide Duration</string>
     <string name="order_type">Order Type</string>

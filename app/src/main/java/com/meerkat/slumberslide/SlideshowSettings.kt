@@ -1,5 +1,5 @@
-// GallerySettings.kt
-package com.meerkat.autogallery
+// SlideshowSettings.kt
+package com.meerkat.slumberslide
 
 data class PhotoInfo(
     val uri: String,
@@ -26,7 +26,7 @@ data class FolderInfo(
     val isLimited: Boolean = false
 )
 
-data class GallerySettings(
+data class SlideshowSettings(
     val isEnabled: Boolean = false,
     val photoInfoList: List<PhotoInfo> = emptyList(),
     val folderInfo: FolderInfo = FolderInfo(),
