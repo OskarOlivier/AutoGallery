@@ -72,6 +72,26 @@
 
     </LinearLayout>
 
+    <!-- Brightness indicator - centered overlay with circular progress -->
+    <com.meerkat.autogallery.CircularBrightnessIndicator
+        android:id="@+id/brightnessIndicator"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:layout_gravity="center"
+        android:background="@drawable/brightness_indicator_background"
+        android:visibility="gone"
+        android:elevation="12dp">
+
+        <ImageView
+            android:id="@+id/brightnessIcon"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_brightness"
+            android:contentDescription="Brightness control" />
+
+    </com.meerkat.autogallery.CircularBrightnessIndicator>
+
     <!-- Gesture hints for first-time users -->
     <LinearLayout
         android:id="@+id/gestureHints"

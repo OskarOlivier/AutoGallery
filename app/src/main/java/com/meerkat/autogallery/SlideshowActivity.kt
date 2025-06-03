@@ -25,6 +25,7 @@ class SlideshowActivity : AppCompatActivity() {
     private lateinit var nextBackgroundImageView: ImageView
     private lateinit var pauseIndicator: LinearLayout
     private lateinit var gestureHints: LinearLayout
+    private lateinit var brightnessIndicator: CircularBrightnessIndicator
 
     // Managers
     private lateinit var uiManager: SlideshowUIManager
@@ -122,17 +123,19 @@ class SlideshowActivity : AppCompatActivity() {
         nextBackgroundImageView = findViewById(R.id.nextBackgroundImageView)
         pauseIndicator = findViewById(R.id.pauseIndicator)
         gestureHints = findViewById(R.id.gestureHints)
+        brightnessIndicator = findViewById(R.id.brightnessIndicator)
 
         nextImageView.alpha = 0f
         nextBackgroundImageView.alpha = 0f
         pauseIndicator.visibility = android.view.View.GONE
         gestureHints.visibility = android.view.View.GONE
+        brightnessIndicator.visibility = android.view.View.GONE
     }
 
     private fun initManagers() {
         preferencesManager = PreferencesManager(this)
 
-        uiManager = SlideshowUIManager(this, pauseIndicator, gestureHints)
+        uiManager = SlideshowUIManager(this, pauseIndicator, gestureHints, brightnessIndicator)
         imageListManager = ImageListManager(this, preferencesManager)
         imageLoader = SlideshowImageLoader(this)
         zoomManager = SlideshowZoomManager()
@@ -153,6 +156,7 @@ class SlideshowActivity : AppCompatActivity() {
             ::onPauseToggle,
             ::onNavigateToNext,
             ::onNavigateToPrevious,
+            ::onBrightnessChange,
             ::onExit
         )
     }
@@ -165,6 +169,9 @@ class SlideshowActivity : AppCompatActivity() {
         val settings = imageListManager.getSettings()
         currentImageView.featheringEnabled = settings.enableFeathering
         nextImageView.featheringEnabled = settings.enableFeathering
+
+        // Set initial brightness for slideshow
+        gestureHandler.setInitialBrightness(settings.slideshowBrightness)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -429,6 +436,14 @@ class SlideshowActivity : AppCompatActivity() {
         finish()
     }
 
+    private fun onBrightnessChange(brightness: Float) {
+        // Save the brightness change to preferences for persistence
+        val currentSettings = imageListManager.getSettings()
+        val updatedSettings = currentSettings.copy(slideshowBrightness = brightness)
+        preferencesManager.saveSettings(updatedSettings)
+        Log.d(TAG, "Brightness saved: ${(brightness * 100).toInt()}%")
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "onDestroy called")
@@ -436,6 +451,7 @@ class SlideshowActivity : AppCompatActivity() {
         isActivityActive = false
         handler.removeCallbacksAndMessages(null)
         zoomManager.cleanup()
+        uiManager.cleanup()
 
         if (isBatteryReceiverRegistered) {
             try {

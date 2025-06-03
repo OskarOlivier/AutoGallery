@@ -52,6 +52,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var squareDetectionSlider: Slider
     private lateinit var squareDetectionText: MaterialTextView
     private lateinit var featheringSwitch: SwitchMaterial
+    private lateinit var slideshowBrightnessSlider: Slider
+    private lateinit var slideshowBrightnessText: MaterialTextView
     private lateinit var checkPermissionsButton: MaterialButton
     private lateinit var permissionStatusText: MaterialTextView
     private lateinit var orientationStatsText: MaterialTextView
@@ -111,6 +113,8 @@ class SettingsActivity : AppCompatActivity() {
         squareDetectionSlider = findViewById(R.id.squareDetectionSlider)
         squareDetectionText = findViewById(R.id.squareDetectionText)
         featheringSwitch = findViewById(R.id.featheringSwitch)
+        slideshowBrightnessSlider = findViewById(R.id.slideshowBrightnessSlider)
+        slideshowBrightnessText = findViewById(R.id.slideshowBrightnessText)
         checkPermissionsButton = findViewById(R.id.checkPermissionsButton)
         permissionStatusText = findViewById(R.id.permissionStatusText)
         orientationStatsText = findViewById(R.id.orientationStatsText)
@@ -158,6 +162,8 @@ class SettingsActivity : AppCompatActivity() {
         squareDetectionSlider.value = settings.squareDetectionSensitivity
         updateSquareDetectionText(settings.squareDetectionSensitivity)
         featheringSwitch.isChecked = settings.enableFeathering
+        slideshowBrightnessSlider.value = settings.slideshowBrightness
+        updateSlideshowBrightnessText(settings.slideshowBrightness)
     }
 
     private fun setupListeners() {
@@ -181,6 +187,10 @@ class SettingsActivity : AppCompatActivity() {
             updateSquareDetectionText(value)
         }
 
+        slideshowBrightnessSlider.addOnChangeListener { _, value, _ ->
+            updateSlideshowBrightnessText(value)
+        }
+
         slideDurationSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
             override fun onStartTrackingTouch(slider: Slider) {}
             override fun onStopTrackingTouch(slider: Slider) {
@@ -200,6 +210,13 @@ class SettingsActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(slider: Slider) {
                 saveCurrentSettings()
                 updateOrientationStats()
+            }
+        })
+
+        slideshowBrightnessSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                saveCurrentSettings()
             }
         })
 
@@ -372,6 +389,11 @@ class SettingsActivity : AppCompatActivity() {
         zoomAmountText.text = "${100 + zoomAmount}% zoom"
     }
 
+    private fun updateSlideshowBrightnessText(brightness: Float) {
+        val percentage = (brightness * 100).toInt()
+        slideshowBrightnessText.text = "$percentage% brightness"
+    }
+
     private fun updateOrientationStats() {
         val photoInfoList = settings.photoInfoList
 
@@ -416,7 +438,8 @@ class SettingsActivity : AppCompatActivity() {
             batteryManagementMode = batteryManagementMode,
             enableOrientationFiltering = orientationFilteringSwitch.isChecked,
             squareDetectionSensitivity = squareDetectionSlider.value,
-            enableFeathering = featheringSwitch.isChecked
+            enableFeathering = featheringSwitch.isChecked,
+            slideshowBrightness = slideshowBrightnessSlider.value
         )
 
         preferencesManager.saveSettings(newSettings)

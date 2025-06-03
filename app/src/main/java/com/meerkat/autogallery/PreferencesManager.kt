@@ -25,6 +25,7 @@ class PreferencesManager(context: Context) {
             putBoolean("enable_orientation_filtering", settings.enableOrientationFiltering)
             putFloat("square_detection_sensitivity", settings.squareDetectionSensitivity)
             putBoolean("enable_feathering", settings.enableFeathering)
+            putFloat("slideshow_brightness", settings.slideshowBrightness)
             apply()
         }
     }
@@ -77,7 +78,8 @@ class PreferencesManager(context: Context) {
             batteryManagementMode = batteryManagementMode,
             enableOrientationFiltering = prefs.getBoolean("enable_orientation_filtering", true),
             squareDetectionSensitivity = prefs.getFloat("square_detection_sensitivity", 0.8f).coerceIn(0.5f, 1.0f),
-            enableFeathering = prefs.getBoolean("enable_feathering", true)
+            enableFeathering = prefs.getBoolean("enable_feathering", true),
+            slideshowBrightness = prefs.getFloat("slideshow_brightness", 1.0f).coerceIn(0.0f, 1.0f)
         )
     }
 

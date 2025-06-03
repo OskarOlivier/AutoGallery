@@ -15,12 +15,16 @@ import android.widget.LinearLayout
 class SlideshowUIManager(
     private val activity: Activity,
     private val pauseIndicator: LinearLayout,
-    private val gestureHints: LinearLayout
+    private val gestureHints: LinearLayout,
+    private val brightnessIndicator: CircularBrightnessIndicator
 ) {
 
     companion object {
         private const val TAG = "SlideshowUIManager"
+        private const val BRIGHTNESS_INDICATOR_DURATION = 2500L // 2.5 seconds
     }
+
+    private var brightnessIndicatorRunnable: Runnable? = null
 
     fun setupFullscreen() {
         activity.window.setFlags(
@@ -64,6 +68,60 @@ class SlideshowUIManager(
 
         setupUIVisibilityListener()
         Log.d(TAG, "Fullscreen setup completed for Android ${Build.VERSION.SDK_INT}")
+    }
+
+    fun setBrightness(brightness: Float) {
+        val clampedBrightness = brightness.coerceIn(0.0f, 1.0f)
+        val layoutParams = activity.window.attributes
+        layoutParams.screenBrightness = clampedBrightness
+        activity.window.attributes = layoutParams
+        Log.d(TAG, "Window brightness set to: $clampedBrightness")
+    }
+
+    fun showBrightnessIndicator(brightness: Float) {
+        val clampedBrightness = brightness.coerceIn(0.0f, 1.0f)
+
+        // Update the circular progress
+        brightnessIndicator.setBrightnessProgress(clampedBrightness)
+
+        // Show the indicator
+        brightnessIndicator.visibility = View.VISIBLE
+        brightnessIndicator.alpha = 0f
+        brightnessIndicator.animate()
+            .alpha(0.9f)
+            .setDuration(200)
+            .start()
+
+        // Cancel any existing hide runnable
+        brightnessIndicatorRunnable?.let {
+            brightnessIndicator.removeCallbacks(it)
+        }
+
+        // Schedule hiding the indicator
+        brightnessIndicatorRunnable = Runnable {
+            hideBrightnessIndicator()
+        }.also { runnable ->
+            brightnessIndicator.postDelayed(runnable, BRIGHTNESS_INDICATOR_DURATION)
+        }
+
+        Log.d(TAG, "Brightness indicator shown: ${(clampedBrightness * 100).toInt()}%")
+    }
+
+    fun hideBrightnessIndicator() {
+        brightnessIndicatorRunnable?.let {
+            brightnessIndicator.removeCallbacks(it)
+            brightnessIndicatorRunnable = null
+        }
+
+        if (brightnessIndicator.visibility == View.VISIBLE) {
+            brightnessIndicator.animate()
+                .alpha(0f)
+                .setDuration(200)
+                .withEndAction {
+                    brightnessIndicator.visibility = View.GONE
+                }
+                .start()
+        }
     }
 
     private fun setupUIVisibilityListener() {
@@ -174,5 +232,12 @@ class SlideshowUIManager(
                     .start()
             }
             .start()
+    }
+
+    fun cleanup() {
+        brightnessIndicatorRunnable?.let {
+            brightnessIndicator.removeCallbacks(it)
+            brightnessIndicatorRunnable = null
+        }
     }
 }

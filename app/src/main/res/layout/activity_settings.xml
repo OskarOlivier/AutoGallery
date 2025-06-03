@@ -271,8 +271,32 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Edge feathering effect"
-                    android:layout_marginBottom="8dp"
+                    android:layout_marginBottom="16dp"
                     android:checked="true" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Slideshow Brightness"
+                    android:textAppearance="?attr/textAppearanceBodyLarge"
+                    android:layout_marginBottom="8dp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/slideshowBrightnessText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="100% brightness"
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:layout_marginBottom="8dp" />
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/slideshowBrightnessSlider"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:valueFrom="0.1"
+                    android:valueTo="1.0"
+                    android:value="1.0"
+                    android:stepSize="0.05" />
 
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
